@@ -3,6 +3,6 @@ SEED Lab Repository
 This repository is for use in SEED lab class.
 
 Project Structure:
-/mini_project
-	-	Marker_Detect.py # Detect marker and display location
-	-	README.md
+/Mini_Project/
+	- Marker_Detect.py # Detect marker and display location
+	- README.md
