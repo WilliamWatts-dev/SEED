@@ -19,10 +19,10 @@ ARD_ADDR = 8
 offset = 0
 
 # LCD initialization
-#i2c = board.I2C()
-#lcd = character_lcd.Character_LCD_RGB_I2C(i2c, 16, 2)
-#lcd.clear()
-#lcd.color = [100, 0, 0] # red
+i2c = board.I2C()
+lcd = character_lcd.Character_LCD_RGB_I2C(i2c, 16, 2)
+lcd.clear()
+lcd.color = [100, 0, 0] # red
 
 # Initialize SMBus library with I2C bus 1
 bus = SMBus(1)
@@ -40,7 +40,7 @@ if not cap.isOpened():
 last_ids = None
 print("Press 'q' in any window to quit")
 # Frame change variables
-prevX, prevY = np.nan, np.nan
+last_X, last_Y = np.nan, np.nan
 while True:
 
     # Capture frame
@@ -60,13 +60,10 @@ while True:
     if ids is not None:
         if not np.array_equal(ids, last_ids):
             id_str = "IDs: " + ",".join(str(id[0]) for id in ids)
-            #print(id_str)
-            #lcd.clear()
-            #lcd.message = id_str
+            print(id_str)
+
     else:
         print("No markers found")
-        #lcd.clear()
-        #lcd.message = "No markers found"
 
     last_ids = ids
 
@@ -83,18 +80,19 @@ while True:
         centers = centers.reshape(N,2) # (N,1,2) -> (N,2)
 
         # Draw circle on center (rec: disable)
-        for x,y in centers.astype(int):
-            cv2.circle(frame, (x,y), 15, (255,0,0), -1)
+        #for x,y in centers.astype(int):
+            #cv2.circle(frame, (x,y), 15, (255,0,0), -1)
 
         # Shift origin to center of frame
         centers[:, 0] -= WIDTH/2
         centers[:, 1] -= HEIGHT/2
 
-        currX = centers[:, 0]
-        currY = centers[:, 1]
+        curr_X = centers[:, 0]
+        curr_Y = centers[:, 1]
 
-        if prevX is np.nan or (prevX * currX < 0).any() or (prevY * currY < 0).any():
-            print("Quadrant boundary crossed!")
+        # Check if the origin was crossed
+        if last_X is np.nan or (last_X * curr_X < 0).any() or (last_Y * curr_Y < 0).any():
+            ##print("Quadrant boundary crossed!")
         
             # Fill quadrants
             quadrants = [''] * N
@@ -112,18 +110,19 @@ while True:
                 elif x <= 0 and y <= 0:
                     quadrants[center] = 0b01 # 'NW'
 
-            ##Print quadrants
             ##print(bin(quadrants[0]))
 
             # Send quadrant over I2C
-            
-            #bus.write_byte_data(ARD_ADDR, offset, quadrants[0])
+            bus.write_byte_data(ARD_ADDR, offset, quadrants[0])
             #bus.write_block_data(ARD_ADDR, offset, quadrants) # Send block for multiple markers
 
             # Update LCD with threading
+            lcd.clear()
+            lcd.message = "Goal Position: " + bin(quadrants[0])
 
-        # Update prevX, prevY
-        prevX, prevY = currX, currY
+        
+        # Update last_X, last_Y
+        last_X, last_Y = curr_X, curr_Y
 
                 
     # Display frame
@@ -138,5 +137,5 @@ while True:
 # Cleanup
 cap.release()
 cv2.destroyAllWindows()
-#lcd.clear()
-#lcd.color = [0, 0, 0]
+lcd.clear()
+lcd.color = [0, 0, 0]
