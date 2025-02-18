@@ -5,7 +5,7 @@
 - Detect a marker in the image.  
 - Continuously display the image with the marker's position.  
 - Show wheel status on an LCD using threading.
-- Send position to Arduino.
+- Send position to Arduino via IC2 transfer.
 - Turn robot's wheels accordingly to represent marker's current quadrant
 
 ## Files  
@@ -14,8 +14,6 @@
 - **Mini_Project.ino** - Script for taking input from .py file and moving the robot's wheels accordingly
 - **README.md** – Project documentation.  
 
-## TODO  
+## Matlab Simulation Results  
 
-- [ ] Detect marker  
-- [ ] Continuously display image and show marker position  
-- [ ] Show wheel status on LCD with threading  
+![image](https://github.com/user-attachments/assets/8ed0ab4a-2e46-4bdd-be60-265e2de126c4)
