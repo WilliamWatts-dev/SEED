@@ -1,4 +1,5 @@
 #include <Encoder.h> // Use the Encoder library for handling encoders
+#include <Wire.h> // Include the Wire library for I2C
 
 const float pos_ONE = 0.76; // sets the wheel to the '1' position
 const float pos_ZERO = 0; // sets the wheel to the '0' position
@@ -63,6 +64,16 @@ float appliedVoltage2 = 0.0;
 unsigned int PWM1 = 0;
 unsigned int PWM2 = 0;
 
+// Quadrant value inputted from raspberry pi
+uint8_t quadrants;
+
+// Function that executes whenever data is received from raspberry pi
+void receiveEvent(int howMany) {
+  while (Wire.available()) { // loop through all but the last
+    quadrants = Wire.read(); // receive pi values as uint8_t values
+  }
+}
+
 void setup() {
     // Set motor pins as outputs
     pinMode(motor1PWM, OUTPUT);
@@ -78,6 +89,12 @@ void setup() {
     Serial.begin(115200);
     Serial.println("Time(s)\tVoltage1(V)\tVelocity1(rad/s)\tVoltage2(V)\tVelocity2(rad/s)"); // Column headers
 
+    // Join I2C bus as slave with address 8
+    Wire.begin(0x8);
+  
+    // Call receiveEvent when data received                
+    Wire.onReceive(receiveEvent);
+
     // Initialize timing variables
     last_time_ms = millis();
     start_time_ms = last_time_ms;
@@ -87,6 +104,22 @@ void loop() {
     // Get current time
     current_time = (float)(millis() - start_time_ms) / 1000.0;
 
+    // Switch statement for recieving CV information.
+    switch (quadrants) {
+      case 0b00: // Northeast or Default
+        desiredPos1 = pos_ZERO; // 0
+        desiredPos2 = pos_ZERO; // 0
+      case 0b01: // Northwest
+        desiredPos1 = pos_ZERO; // 0
+        desiredPos2 = pos_ONE; // 1
+      case 0b10: // Southeast
+        desiredPos1 = pos_ONE; // 1
+        desiredPos2 = pos_ZERO; // 0
+      case 0b11: // Southwest
+        desiredPos1 = pos_ONE; // 1
+        desiredPos2 = pos_ONE; // 1
+    }
+/* code for deugging desired position
     // Set desired positions based on time (0 or 1 for each motor)
     if (current_time <= 1.0) {
         desiredPos1 = desiredPos2 = pos_ZERO; // Starting position
@@ -98,7 +131,7 @@ void loop() {
     else {
         desiredPos1 = desiredPos2 = pos_ZERO; // Back to starting position
     }
-
+*/
     // Read motor position (in counts) and convert to radians
     long pos1_counts = motor1Encoder.read();
     float pos1_rad = 2 * PI * (float)pos1_counts / (countsPerRevolution * 4);
