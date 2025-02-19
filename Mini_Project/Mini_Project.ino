@@ -1,4 +1,3 @@
-// Pin connections:
 #include <Encoder.h> // Use the Encoder library for handling encoders
 #include <Wire.h> // Include the Wire library for I2C
 
