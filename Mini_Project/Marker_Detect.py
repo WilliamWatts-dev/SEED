@@ -2,6 +2,7 @@
 # 4 on pi to A3 on Arduino
 # 5 on pi to A5 on Arduino
 # 6 (GND) on pi to GND on Arduino
+
 import cv2
 from cv2 import aruco
 import numpy as np
@@ -22,14 +23,31 @@ logging.basicConfig(
 # GLOBAL VARS
 HEIGHT = 480
 WIDTH = 640
-ARD_ADDR = 8
-LCD_ADDR = 20
+ARD_ADDR = 0x08
+LCD_ADDR = 0x20
 offset = 0
 
 
 # Message queue for LCD updates
 lcd_queue = queue.Queue()
 
+def send_quadrant_to_arduino(bus, quadrant_value):
+    max_retries = 3
+    retry_delay = 0.1
+
+    for attempt in range(max_retries):
+        try:
+            bus.write_byte_data(ARD_ADDR, offset, quadrant_value)
+            logging.info(f"Successfully sent quadrant value: {quadrant_value}")
+            return True
+        except Exception as e:
+            if attempt < max_retries - 1:
+                logging.warning(f"Retry {attempt + 1}/{max_retries} failed: {e}")
+                sleep(retry_delay)
+            else:
+                logging.error(f"Failed to send quadrant after {max_retries} attempts: {e}")
+                return False
+    return False
 
 def get_quadrants(centers, N):
     quadrants = np.zeros(N, dtype=np.uint8)
@@ -44,16 +62,31 @@ def get_quadrants(centers, N):
 
     return quadrants
 
+def init_i2c_lcd():
+    try:
+        i2c = board.I2C()
+        sleep(0.1) # give time for I2C to initialize
+
+        # create LCD object
+        lcd = character_lcd.Character_LCD_RGB_I2C(i2c, 16, 2, address=LCD_ADDR)
+        sleep(0.1)
+
+        # Test LCD
+        lcd.clear()
+        sleep(0.1)
+        lcd.color = [100, 0, 0]
+        logging.info("LCD initialized successfully")
+        return lcd
+    except Exception as e:
+        logging.error(f"LCD initialization failed: {e}")
+        raise
+
 
 def lcd_update_thread():
     """Thread function to handle LCD updates"""
+    lcd = None
     try:
-        # Initialize LCD
-        i2c = board.I2C()
-        lcd = character_lcd.Character_LCD_RGB_I2C(i2c, 16, 2)
-        lcd.clear()
-        lcd.color = [100, 0, 0]  # red
-        logging.info("LCD initialized")
+        lcd = init_i2c_lcd()
 
         while True:
             if not lcd_queue.empty():
@@ -62,19 +95,22 @@ def lcd_update_thread():
                     break
                 try:
                     lcd.clear()
+                    sleep(0.05)
                     lcd.message = message
                     logging.info(f"LCD updated with: {message}")
                 except Exception as e:
                     logging.error(f"Error updating LCD: {e}")
             sleep(0.1)  # Small delay to prevent busy-waiting
 
-        # Cleanup LCD on thread exit
-        lcd.clear()
-        lcd.color = [0, 0, 0]
-        logging.info("LCD thread stopping")
-
     except Exception as e:
         logging.error(f"LCD thread error: {e}")
+    finally:
+        if lcd:
+            try:
+                lcd.clear()
+                lcd.color = [0, 0, 0]
+            except Exception as e:
+                logging.error(f"LCD cleanup error: {e}")
 
 
 
@@ -164,16 +200,16 @@ try:
             # Send quadrant over I2C
             try:
                 if quadrants[0] == 0b00:
-                    bus.write_byte_data(ARD_ADDR, offset, 0)
+                    send_quadrant_to_arduino(bus, 0)
                     logging.info(f"Sent quadrants: {[bin(q) for q in quadrants]}")
                 elif quadrants[0] == 0b01:
-                    bus.write_byte_data(ARD_ADDR, offset, 1)
+                    send_quadrant_to_arduino(bus, 1)
                     logging.info(f"Sent quadrants: {[bin(q) for q in quadrants]}")
                 elif quadrants[0] == 0b10:
-                    bus.write_byte_data(ARD_ADDR, offset, 2)
+                    send_quadrant_to_arduino(bus, 2)
                     logging.info(f"Sent quadrants: {[bin(q) for q in quadrants]}")
                 elif quadrants[0] == 0b11:
-                    bus.write_byte_data(ARD_ADDR, offset, 3)
+                    send_quadrant_to_arduino(bus, 3)
                     logging.info(f"Sent quadrants: {[bin(q) for q in quadrants]}")
             except Exception as e:
                 logging.error(f"I2C error: {e}")
