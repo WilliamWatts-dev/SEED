@@ -19,21 +19,15 @@ logging.basicConfig(
 # Message queue for LCD updates
 lcd_queue = queue.Queue()
 
-
 def get_quadrants(centers, N):
-    quadrants = [''] * N
+    quadrants = np.zeros(N, dtype=np.uint8)
 
-    for center in range(N):
-        x, y = centers[center]
+    x, y = centers[:, 0], centers[:, 1]  # Extract x and y coordinates
 
-        if x >= 0 and y >= 0:
-            quadrants[center] = 0b10  # SE
-        elif x >= 0 and y <= 0:
-            quadrants[center] = 0b00  # NE
-        elif x <= 0 and y >= 0:
-            quadrants[center] = 0b11  # SW
-        elif x <= 0 and y <= 0:
-            quadrants[center] = 0b01  # NW
+    quadrants[(x >= 0) & (y >= 0)] = 0b10  # SE
+    quadrants[(x >= 0) & (y <= 0)] = 0b00  # NE
+    quadrants[(x <= 0) & (y >= 0)] = 0b11  # SW
+    quadrants[(x <= 0) & (y <= 0)] = 0b01  # NW
 
     return quadrants
 
@@ -158,7 +152,7 @@ try:
 
             # Send quadrant over I2C
             try:
-                bus.write_block_data(ARD_ADDR, offset, quadrants)
+                bus.write_block_data(ARD_ADDR, offset, quadrants) ##may need to .flatten() quadrants to 1D array for I2C
                 logging.info(f"Sent quadrants: {[bin(q) for q in quadrants]}")
             except Exception as e:
                 logging.error(f"I2C error: {e}")
