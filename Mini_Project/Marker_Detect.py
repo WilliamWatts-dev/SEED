@@ -19,6 +19,7 @@ logging.basicConfig(
 # Message queue for LCD updates
 lcd_queue = queue.Queue()
 
+
 def get_quadrants(centers, N):
     quadrants = np.zeros(N, dtype=np.uint8)
 
@@ -28,6 +29,7 @@ def get_quadrants(centers, N):
     quadrants[(x >= 0) & (y <= 0)] = 0b00  # NE
     quadrants[(x <= 0) & (y >= 0)] = 0b11  # SW
     quadrants[(x <= 0) & (y <= 0)] = 0b01  # NW
+
 
     return quadrants
 
