@@ -19,6 +19,14 @@ logging.basicConfig(
     format='%(asctime)s - %(threadName)s - %(message)s'
 )
 
+# GLOBAL VARS
+HEIGHT = 480
+WIDTH = 640
+ARD_ADDR = 8
+LCD_ADDR = 20
+offset = 0
+
+
 # Message queue for LCD updates
 lcd_queue = queue.Queue()
 
@@ -69,11 +77,6 @@ def lcd_update_thread():
         logging.error(f"LCD thread error: {e}")
 
 
-# GLOBAL VARS
-HEIGHT = 480
-WIDTH = 640
-ARD_ADDR = 0x20
-offset = 0
 
 # Initialize SMBus library with I2C bus 1
 bus = SMBus(1)
@@ -127,8 +130,11 @@ try:
             logging.info("No markers found")
         last_ids = ids
 
+        
+
+        
         # Skip marker tracking if not detected
-        if not ids or not corners:
+        if ids is None or corners is None:
             cv2.imshow('Aruco Detection', frame)
             continue
 
@@ -157,16 +163,16 @@ try:
 
             # Send quadrant over I2C
             try:
-                if quadrants == 0b00:
+                if quadrants[0] == 0b00:
                     bus.write_byte_data(ARD_ADDR, offset, 0)
                     logging.info(f"Sent quadrants: {[bin(q) for q in quadrants]}")
-                elif quadrants == 0b01:
+                elif quadrants[0] == 0b01:
                     bus.write_byte_data(ARD_ADDR, offset, 1)
                     logging.info(f"Sent quadrants: {[bin(q) for q in quadrants]}")
-                elif quadrants == 0b10:
+                elif quadrants[0] == 0b10:
                     bus.write_byte_data(ARD_ADDR, offset, 2)
                     logging.info(f"Sent quadrants: {[bin(q) for q in quadrants]}")
-                elif quadrants == 0b11:
+                elif quadrants[0] == 0b11:
                     bus.write_byte_data(ARD_ADDR, offset, 3)
                     logging.info(f"Sent quadrants: {[bin(q) for q in quadrants]}")
             except Exception as e:
