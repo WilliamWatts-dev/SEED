@@ -1,3 +1,4 @@
+// Arduino pin connections: 
 #include <Encoder.h> // Use the Encoder library for handling encoders
 #include <Wire.h> // Include the Wire library for I2C
 
@@ -65,14 +66,7 @@ unsigned int PWM1 = 0;
 unsigned int PWM2 = 0;
 
 // Quadrant value inputted from raspberry pi
-uint8_t quadrants;
-
-// Function that executes whenever data is received from raspberry pi
-void receiveEvent(int howMany) {
-  while (Wire.available()) { // loop through all but the last
-    quadrants = Wire.read(); // receive pi values as uint8_t values
-  }
-}
+int quadrant = 0;
 
 void setup() {
     // Set motor pins as outputs
@@ -89,11 +83,8 @@ void setup() {
     Serial.begin(115200);
     Serial.println("Time(s)\tVoltage1(V)\tVelocity1(rad/s)\tVoltage2(V)\tVelocity2(rad/s)"); // Column headers
 
-    // Join I2C bus as slave with address 8
-    Wire.begin(0x8);
-  
-    // Call receiveEvent when data received                
-    Wire.onReceive(receiveEvent);
+    // Join I2C bus as slave with address 20
+    Wire.begin(0x20);
 
     // Initialize timing variables
     last_time_ms = millis();
@@ -104,18 +95,22 @@ void loop() {
     // Get current time
     current_time = (float)(millis() - start_time_ms) / 1000.0;
 
+    if (Wire.available()) { // loop through all but the last
+      quadrant = Wire.read(); // receive pi values as uint8_t values
+    }
+
     // Switch statement for recieving CV information.
-    switch (quadrants) {
-      case 0b00: // Northeast or Default
+    switch (quadrant) {
+      case 0: // Northeast or Default
         desiredPos1 = pos_ZERO; // 0
         desiredPos2 = pos_ZERO; // 0
-      case 0b01: // Northwest
+      case 1: // Northwest
         desiredPos1 = pos_ZERO; // 0
         desiredPos2 = pos_ONE; // 1
-      case 0b10: // Southeast
+      case 2: // Southeast
         desiredPos1 = pos_ONE; // 1
         desiredPos2 = pos_ZERO; // 0
-      case 0b11: // Southwest
+      case 3: // Southwest
         desiredPos1 = pos_ONE; // 1
         desiredPos2 = pos_ONE; // 1
     }
