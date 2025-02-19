@@ -1,4 +1,7 @@
-# Pi to Arduino pin connections: 
+# Pi to Arduino pin connections:
+# 4 on pi to A3 on Arduino
+# 5 on pi to A5 on Arduino
+# 6 (GND) on pi to GND on Arduino
 import cv2
 from cv2 import aruco
 import numpy as np
