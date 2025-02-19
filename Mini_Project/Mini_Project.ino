@@ -1,5 +1,9 @@
+// Pin connections:
 #include <Encoder.h> // Use the Encoder library for handling encoders
 #include <Wire.h> // Include the Wire library for I2C
+
+volatile boolean newData = false;
+volatile uint8_t receivedQuadrant = 0;
 
 const float pos_ONE = 0.76; // sets the wheel to the '1' position
 const float pos_ZERO = 0; // sets the wheel to the '0' position
@@ -67,7 +71,16 @@ unsigned int PWM2 = 0;
 // Quadrant value inputted from raspberry pi
 int quadrant = 0;
 
-
+void receiveEvent(int howMany) {
+  while (Wire.available()) {
+    receivedQuadrant = Wire.read();
+    newData = true;
+  }
+  // Clear the buffer
+  while (Wire.available()){
+    wire.read();
+  }
+}
 
 void setup() {
     // Set motor pins as outputs
@@ -86,6 +99,7 @@ void setup() {
 
     // Join I2C bus as slave with address 8
     Wire.begin(8);
+    Wire.onReceive(receiveEvent);
 
     // Initialize timing variables
     last_time_ms = millis();
@@ -95,27 +109,38 @@ void setup() {
 void loop() {
     // Get current time
     current_time = (float)(millis() - start_time_ms) / 1000.0;
-    while (Wire.available()) { // loop through all but the last
-     quadrant = Wire.read(); // receive pi values as uint8_t values
-      }
+
+    // Update quadrant if new data received
+    if (newData) {
+      quadrant = receivedQuadrant;
+      newData = false;
+      // Debug print
+      Serial.print("New quadrant received: ");
+      Serial.println(quadrant);
+    }
+    
     if (current_time <= 5.0) {
         desiredPos1 = pos_ZERO;
         desiredPos2 = pos_ZERO; // Starting position
     }
-    if (current_time > 5.0) {
+    else {
         switch (quadrant) {
         case 0: // Northeast or Default
           desiredPos1 = pos_ZERO; // 0
           desiredPos2 = pos_ZERO; // 0
+          break;
         case 1: // Northwest
           desiredPos1 = pos_ZERO; // 0
           desiredPos2 = pos_ONE; // 1
+          break;
         case 2: // Southeast
           desiredPos1 = pos_ONE; // 1
           desiredPos2 = pos_ZERO; // 0
+          break;
         case 3: // Southwest
           desiredPos1 = pos_ONE; // 1
           desiredPos2 = pos_ONE; // 1
+          break;
       }
     }
 
