@@ -69,7 +69,7 @@ def lcd_update_thread():
 # GLOBAL VARS
 HEIGHT = 480
 WIDTH = 640
-ARD_ADDR = 8
+ARD_ADDR = 0x20
 offset = 0
 
 # Initialize SMBus library with I2C bus 1
@@ -154,8 +154,18 @@ try:
 
             # Send quadrant over I2C
             try:
-                bus.write_block_data(ARD_ADDR, offset, quadrants) ##may need to .flatten() quadrants to 1D array for I2C
-                logging.info(f"Sent quadrants: {[bin(q) for q in quadrants]}")
+                if quadrants == 0b00:
+                    bus.write_byte_data(ARD_ADDR, offset, 0)
+                    logging.info(f"Sent quadrants: {[bin(q) for q in quadrants]}")
+                elif quadrants == 0b01:
+                    bus.write_byte_data(ARD_ADDR, offset, 1)
+                    logging.info(f"Sent quadrants: {[bin(q) for q in quadrants]}")
+                elif quadrants == 0b10:
+                    bus.write_byte_data(ARD_ADDR, offset, 2)
+                    logging.info(f"Sent quadrants: {[bin(q) for q in quadrants]}")
+                elif quadrants == 0b11:
+                    bus.write_byte_data(ARD_ADDR, offset, 3)
+                    logging.info(f"Sent quadrants: {[bin(q) for q in quadrants]}")
             except Exception as e:
                 logging.error(f"I2C error: {e}")
 
