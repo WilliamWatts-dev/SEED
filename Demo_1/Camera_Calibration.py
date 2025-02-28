@@ -1,4 +1,3 @@
-# Camera_Calibration.py
 import cv2
 import numpy as np
 import glob
@@ -17,9 +16,10 @@ objp *= square_size
 objpoints = []
 imgpoints = []
 
-# Path to your calibration images
-image_directory = 'path_to_your_images'  # Update this with your directory path
-image_format = 'jpg'  # Update this if your images are in a different format
+# Get the directory of the script and set the image directory relative to it
+script_directory = os.path.dirname(os.path.abspath(__file__))
+image_directory = os.path.join(script_directory, "images")
+image_format = 'jpg'  # Change this if your images are in a different format
 
 # Create the full file path pattern
 image_pattern = os.path.join(image_directory, f'*.{image_format}')
@@ -28,7 +28,7 @@ image_pattern = os.path.join(image_directory, f'*.{image_format}')
 images = glob.glob(image_pattern)
 
 if not images:
-    print("No images found. Please check the directory path and image format.")
+    print(f"No images found in {image_directory}. Please check the directory path and image format.")
 else:
     for fname in images:
         img = cv2.imread(fname)
@@ -61,7 +61,8 @@ else:
         print(camera_matrix)
 
         # Save the camera matrix and distortion coefficients
-        np.savez('camera_calibration.npz', camera_matrix=camera_matrix, dist_coeffs=dist_coeffs)
+        np.savez(os.path.join(script_directory, 'camera_calibration.npz'), 
+                 camera_matrix=camera_matrix, dist_coeffs=dist_coeffs)
         print("Calibration successful. Calibration data saved to 'camera_calibration.npz'.")
     else:
         print("Calibration failed. Please ensure you have sufficient valid images.")
