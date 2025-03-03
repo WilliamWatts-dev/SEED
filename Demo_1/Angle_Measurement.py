@@ -20,9 +20,9 @@ aruco_dict = aruco.getPredefinedDictionary(aruco.DICT_6X6_250)
 parameters = aruco.DetectorParameters()
 
 # Get camera matrix from camera_calibration.npz
-data = np.load(calibration_directory)
-array1 = data['camera_matrix.npy']
-array2 = data['dist_coeffs.npy']
+with np.load(calibration_directory) as data:
+    camera_matrix = data['camera_matrix.npy']
+    dist_coeffs = data['dist_coeffs.npy']
 
 # Initialize camera
 cap = cv2.VideoCapture(0)
@@ -54,7 +54,14 @@ try:
 
         # Use camera matrix to determine the angle of the marker.
         # arctan(x,z)
+        rvecs, tvecs, _ = aruco.estimatePoseSingleMarkers(corners, camera_matrix, dist_coeffs, markerLength=0.05)
+        rvec = rvecs[0]
+        tvec = tvecs[0][0]
 
+        angle_rad = np.arctan2(tvec[0], tvec[2])
+        angle_deg = np.degrees(angle_rad)
+
+        print("Angle: ", angle_deg)
         
 finally:
     # Cleanup
