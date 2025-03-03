@@ -60,7 +60,7 @@ void loop() {
       currentSpeed = maxSpeed;
     }
   } else if (remainingDistance > 0) {
-    currentSpeed = currentSpeed -= accelerationRate * 0.01;
+    currentSpeed -= accelerationRate * 0.01;
     if (currentSpeed < minSpeed) {
       currentSpeed = minSpeed;
     }
