@@ -19,7 +19,7 @@ imgpoints = []
 # Get the directory of the script and set the image directory relative to it
 script_directory = os.path.dirname(os.path.abspath(__file__))
 image_directory = os.path.join(script_directory, "images")
-image_format = 'png'  # Change this if your images are in a different format
+image_format = 'jpg'  # Change this if your images are in a different format
 
 # Create the full file path pattern
 image_pattern = os.path.join(image_directory, f'*.{image_format}')
