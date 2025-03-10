@@ -16,13 +16,16 @@ const int motor2Dir = 8; // Motor 2 direction pin
 const int motorEnable = 4; // Motor enable pin
 
 // Position control variables
-float desiredRotationRadians = (PI)*0.92; // Target rotation (90 degrees in radians)
+float desiredAngle = 0;
+float desiredRotationRadians = desiredAngle*(PI/180.0)*0.92; // Target rotation (90 degrees in radians)
 float desiredPositionFeet = 1.0; // Set target position in feet
 const float maxSpeed = 0.15; // Lower max speed to reduce overshoot
-const float minSpeed = 0.025;
+const float minSpeed = 0.05;
 const float accelerationRate = 0.05;
 const float accelerationPhase = desiredRotationRadians*0.15; // accelerates for 0.15 or 15% of movement
 const float decelerationPhase = desiredRotationRadians*0.55; // decelerates for 1 - 0.55 = 0.45 or 45% of movement
+const float accelerationPhasefeet = desiredPositionFeet*0.15; // accelerates for 0.15 or 15% of movement
+const float decelerationPhasefeet = desiredPositionFeet*0.75; // decelerates for 1 - 0.55 = 0.45 or 45% of movement
 
 float currentSpeed = 0.0;
 long startPosition, currentPosition;
@@ -56,12 +59,11 @@ void loop() {
 
   // Read current position in counts
   long positionCounts = motorEncoder.read() - startPosition;
-  long positionFeetCounts = motorEncoder.read() - positionCounts;
+
   // Calculate remaining rotation and run the if statement 
   float rotationRadians = (positionCounts * inchesPerCount) / wheelbaseRadius;
   float remainingRotation = desiredRotationRadians - rotationRadians;
-  float positionFeet = (positionFeetCounts * inchesPerCount) / 12.0; // Convert counts to feet
-  remainingDistance -= positionFeet;
+
   if (remainingRotation > 0) {
     // Determine speed profile
     if (rotationRadians < accelerationPhase) { // acceleration phase, rotationRadians is less than acceleration phase
@@ -99,27 +101,27 @@ void loop() {
     analogWrite(motor1PWM, pwmValue);
     analogWrite(motor2PWM, pwmValue*0.93);
   }
-  if (remainingRotation <= 0) {
+  if (remainingRotation <= 0 && remainingDistance > 0) {
+    motorEncoder.readAndReset();
+    long positionFeetCounts = motorEncoder.read() - positionCounts;
+    float positionFeet = (positionFeetCounts * inchesPerCount) / 12.0; // Convert counts to feet
+    remainingDistance = desiredPositionFeet - positionFeet;
     // Determine speed profile
-    if (positionFeet < accelerationPhase) {
+    if (remainingDistance > decelerationPhasefeet) {
       // Acceleration phase
-      currentSpeed += accelerationRate * 0.01; // Increment speed
+      currentSpeed += (accelerationRate * 0.01); // Increment speed
       if (currentSpeed > maxSpeed) {
         currentSpeed = maxSpeed;
       }
-    } else if (positionFeet > decelerationPhase) {
+    } else if (remainingDistance > 0) {
       currentSpeed -= accelerationRate * 0.01;
       if (currentSpeed < minSpeed) {
         currentSpeed = minSpeed;
       }
-    } else if (accelerationPhase < positionFeet && positionFeet < decelerationPhase) {
-      // hold speed
-      currentSpeed = currentSpeed;
-    }
-     else {
+    } else {
       // Stop
       currentSpeed = 0;
-      remainingDistance = 0;
+
     }
 
     // Convert speed to motor voltage
@@ -131,7 +133,7 @@ void loop() {
     // Apply PWM signal based on the voltage
     int pwmValue = min(abs(appliedVoltage) * 255 / Battery_Voltage, 255);
     analogWrite(motor1PWM, pwmValue);
-    analogWrite(motor2PWM, pwmValue*0.92);
+    analogWrite(motor2PWM, pwmValue*0.93);
   }
   if (remainingDistance <= 0 && remainingRotation <= 0) {
     analogWrite(motor1PWM, 0); // Stop motors
