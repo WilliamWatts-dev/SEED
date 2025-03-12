@@ -10,6 +10,10 @@ from pathlib import Path
 # GLOBAL VARS
 HEIGHT = 480
 WIDTH = 640
+ANGLE_OFFSET = 0.0
+MOVING_AVERAGE_SIZE = 5
+
+recent_angles = []
 
 # Get local path
 script_directory = Path(__file__).resolve().parent
@@ -40,27 +44,42 @@ try:
         if not ret:
             break
 
-
+        # Undistort frame
+        dst = cv2.undistort(frame, camera_matrix, dist_coeffs)
+        
         # Convert to grayscale
-        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        gray = cv2.cvtColor(dst, cv2.COLOR_BGR2GRAY)
 
         # Detect markers
         corners, ids, rejected = aruco.detectMarkers(gray, aruco_dict, parameters=parameters)
 
         # Skip marker tracking if not detected
         if ids is None or corners is None:
-            cv2.imshow('Aruco Detection', frame)
+            cv2.imshow('Aruco Detection', dst)
             continue
 
         # Use camera matrix to determine the angle of the marker.
         # arctan(x,z)
-        rvecs, tvecs, _ = aruco.estimatePoseSingleMarkers(corners, camera_matrix, dist_coeffs, markerLength=0.05)
+        rvecs, tvecs, _ = aruco.estimatePoseSingleMarkers(corners, 0.05, camera_matrix, dist_coeffs)
         rvec = rvecs[0]
         tvec = tvecs[0][0]
 
         angle_rad = np.arctan2(tvec[0], tvec[2])
         angle_deg = np.degrees(angle_rad)
 
+         # Apply calibration offset
+        calibrated_angle = angle_deg + ANGLE_OFFSET
+
+        # Add to moving average
+        recent_angles.append(calibrated_angle)
+        if len(recent_angles) > MOVING_AVERAGE_SIZE:
+            recent_angles.pop(0)
+
+        # Calculate moving average
+        avg_angle = sum(recent_angles) / len(recent_angles)
+
+        cv2.imshow('Aruco Detection', dst)
+        
         print("Angle: ", angle_deg)
         
 finally:
