@@ -8,5 +8,5 @@
 - **camera_calibration.npz** - Stores calibration parameters.
 - **camera_matrix.npy** - Camera matrix data.
 - **dist_coeffs.npy** - Lens distortion coefficients.
-- **demo1controls.ino** - Arduino script for camera-related controls.
+- **demo1controls.ino** - Arduino script for motor controls.
 - **positioninfeettest.ino** & **positioninraddtest.ino** - Arduino scripts for positional testing.
