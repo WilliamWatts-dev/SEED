@@ -44,15 +44,17 @@ try:
         if not ret:
             break
 
-        # Undistort frame
+
         dst = cv2.undistort(frame, camera_matrix, dist_coeffs)
-        
+
         # Convert to grayscale
         gray = cv2.cvtColor(dst, cv2.COLOR_BGR2GRAY)
 
         # Detect markers
         corners, ids, rejected = aruco.detectMarkers(gray, aruco_dict, parameters=parameters)
 
+
+        
         # Skip marker tracking if not detected
         if ids is None or corners is None:
             cv2.imshow('Aruco Detection', dst)
@@ -67,7 +69,8 @@ try:
         angle_rad = np.arctan2(tvec[0], tvec[2])
         angle_deg = np.degrees(angle_rad)
 
-         # Apply calibration offset
+
+        # Apply calibration offset
         calibrated_angle = angle_deg + ANGLE_OFFSET
 
         # Add to moving average

@@ -59,6 +59,8 @@ else:
         # Print the camera matrix
         print("Camera matrix:")
         print(camera_matrix)
+        print("Dist matrix:")
+        print(dist_coeffs)
 
         # Save the camera matrix and distortion coefficients
         np.savez(os.path.join(script_directory, 'camera_calibration.npz'), 
