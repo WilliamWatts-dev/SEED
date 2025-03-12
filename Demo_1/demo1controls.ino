@@ -17,14 +17,14 @@ const int motorEnable = 4; // Motor enable pin
 
 // Position control variables
 float desiredAngle = 0.0;
-float desiredRotationRadians = desiredAngle*(PI/180.0)*0.91; // Target rotation (90 degrees in radians)
-float desiredPositionFeet = 8.0; // Set target position in feet
+float desiredRotationRadians = desiredAngle*(PI/180.0)*0.965; // Target rotation (90 degrees in radians)
+float desiredPositionFeet = 8; // Set target position in feet
 const float maxSpeed = 0.2; // Lower max speed to reduce overshoot
 const float minSpeed = 0.05;
 const float accelerationRate = 0.05;
 const float accelerationPhase = desiredRotationRadians*0.15; // accelerates for 0.15 or 15% of movement
-const float decelerationPhase = desiredRotationRadians*0.7; // decelerates for 1 - 0.55 = 0.45 or 45% of movement
-const float decelerationPhasefeet = 0.5; // decelerates for 1 - 0.55 = 0.45 or 45% of movement
+const float decelerationPhase = desiredRotationRadians*0.55; // decelerates for 1 - 0.55 = 0.45 or 45% of movement
+const float decelerationPhasefeet = 1.7; // decelerates for 1 - 0.55 = 0.45 or 45% of movement
 
 float currentSpeed = 0.0;
 long startPosition, currentPosition;
@@ -62,6 +62,7 @@ void loop() {
   // Calculate remaining rotation and run the if statement 
   float rotationRadians = (positionCounts * inchesPerCount) / wheelbaseRadius;
   float remainingRotation = desiredRotationRadians - rotationRadians;
+  
   if (remainingRotation > 0) {
     // Determine speed profile
     if (rotationRadians < accelerationPhase) { // acceleration phase, rotationRadians is less than acceleration phase
@@ -96,8 +97,8 @@ void loop() {
 
     // Apply PWM signal
     int pwmValue = min(abs(appliedVoltage) * 255 / Battery_Voltage, 255);
-    analogWrite(motor1PWM, pwmValue);
-    analogWrite(motor2PWM, pwmValue*0.93);
+    analogWrite(motor1PWM, pwmValue*1.03);
+    analogWrite(motor2PWM, pwmValue*0.85);
     postRotation = positionCounts;
   }
   else if (remainingRotation <= 0.001 && remainingDistance > 0) {
@@ -121,7 +122,6 @@ void loop() {
       currentSpeed = 0;
       remainingDistance = 0;
     }
-
     // Convert speed to motor voltage
     float appliedVoltage = currentSpeed * Battery_Voltage / 2 / maxSpeed;
     if (appliedVoltage > Battery_Voltage) appliedVoltage = Battery_Voltage / 2;
@@ -131,8 +131,9 @@ void loop() {
     digitalWrite(motor2Dir, appliedVoltage > 0 ? LOW : HIGH);
     // Apply PWM signal based on the voltage
     float pwmValue = min(abs(appliedVoltage) * 255 / Battery_Voltage, 255);
-    analogWrite(motor1PWM, (pwmValue*1.05));
-    analogWrite(motor2PWM, (pwmValue*0.937));
+    analogWrite(motor1PWM, (pwmValue*1.04));
+    analogWrite(motor2PWM, (pwmValue*0.945));
+    Serial.println(remainingDistance);
   }
   else if (remainingRotation <= 0 && remainingDistance <= 0) {
     analogWrite(motor1PWM, 0); // Stop motors
