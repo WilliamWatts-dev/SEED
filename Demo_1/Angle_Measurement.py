@@ -28,7 +28,7 @@ logging.basicConfig(
 )
 
 # Message queue for LCD updates
-lcd_queue = queue.Queue()
+lcd_queue = queue.Queue(maxsize=1)
 
 # Store past angles
 recent_angles = []
@@ -156,6 +156,8 @@ try:
         logging.info(f"Angle: {angle_deg}")
 
         # Queue LCD update
+        if not lcd_queue.empty():
+            lcd_queue.get_nowait()    
         lcd_queue.put(f"Angle: {angle_deg}")
         
         # Display frame
