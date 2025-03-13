@@ -1,3 +1,7 @@
+// positioninfeettest.ino
+// Move a robot forward by a specified distance in feet
+// use encoder feedback for speed control and smooth acceleration/deceleration.  
+
 #include <Encoder.h> // Use the Encoder library for handling encoders
 #include <Wire.h> // Include the Wire library for I2C
 
