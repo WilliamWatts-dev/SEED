@@ -1,3 +1,7 @@
+// demo1controls.ino
+// This program controls a two-wheeled robot to rotate by a set angle  
+// and then move forward a specified distance using encoder feedback.  
+
 #include <Encoder.h> // Use the Encoder library for handling encoders
 #include <Wire.h> // Include the Wire library for I2C
 
