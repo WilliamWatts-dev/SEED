@@ -1,3 +1,8 @@
+# Camera_Calibration.py
+# Read in images from images/
+# Fill objpoints & imgpoints to calibrate camera
+# and output camera_calibration.npz
+
 import cv2
 import numpy as np
 import glob
