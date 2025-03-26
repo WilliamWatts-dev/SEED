@@ -39,7 +39,7 @@ unsigned long last_time_ms, start_time_ms;
 float current_time;
 
 // State Machine Variables in order of use
-bool currentState = 0;
+int currentState = 0;
 const int commTestState = 1; // Start with communications test, no errors, move on
 const int initialRotationState = 2; // Start rotation, once qr is found, move on 
 const int qrFoundState = 3; // Transfer initial desired angle + feet, move on
