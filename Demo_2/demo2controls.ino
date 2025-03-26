@@ -1,6 +1,11 @@
 #include <Encoder.h> // Use the Encoder library for handling encoders
 #include <Wire.h> // Include the Wire library for I2C
 
+// Variables for I2C transfer 
+volatile bool newData = false;
+volatile uint8_t readData = 0;
+uint8_t recievedData = 0;
+
 const float wheelDiameterInches = 6.0;
 const float wheelbaseDiameterInches = 15.0; // Distance between wheels
 const float countsPerRevolution = 64 * 50; // Encoder resolution * gear ratio
@@ -16,7 +21,7 @@ const int motor2Dir = 8; // Motor 2 direction pin
 const int motorEnable = 4; // Motor enable pin
 
 // Position control variables
-float desiredAngle = 180.0;
+float desiredAngle = 360.0;
 float desiredRotationRadians = desiredAngle*(PI/180.0)*0.965; // Target rotation (90 degrees in radians)
 float desiredPositionFeet = 2; // Set target position in feet
 const float maxSpeed = 0.2; // Lower max speed to reduce overshoot
@@ -39,14 +44,25 @@ unsigned long last_time_ms, start_time_ms;
 float current_time;
 
 // State Machine Variables in order of use
-bool commTestState; // Start with communications test, no errors, move on
-bool initialRotationState; // Start rotation, once qr is found, move on 
-bool qrFoundState; // Transfer initial desired angle + feet, move on
-bool moveCycleState; // Initiate loop on moving towards qr until at least 1.5 feet away then stop, move on
-bool arrowReadState; // Transfer arrow data to arduino, move on
-bool arrowRotation; // Rotation 90 degrees left, right, or catch error, move on
-bool continuedRotationState; // Start rotation again, loop back to qrFoundState once found
+int currentState = 0;
+const int commTestState = 1; // Start with communications test, no errors, move on
+const int initialRotationState = 2; // Start rotation, once qr is found, move on 
+const int qrFoundState = 3; // Transfer initial desired angle + feet, move on
+const int moveCycleState = 4; // Initiate loop on moving towards qr until at least 1.5 feet away then stop, move on
+const int arrowReadState = 5; // Transfer arrow data to arduino, move on
+const int arrowRotationState = 6; // Rotation 90 degrees left, right, or catch error, move on
+const int continuedRotationState = 7; // Start rotation again, loop back to qrFoundState once found
 
+void receiveEvent(int howMany) {
+  while (Wire.available()) {
+    readData = Wire.read();
+    newData = true;
+  }
+  // Clear the buffer
+  while (Wire.available()){
+    Wire.read();
+  }
+}
 
 void setup() {
   // put your setup code here, to run once:
@@ -59,9 +75,14 @@ void setup() {
   digitalWrite(motorEnable, HIGH); // Enable motor driver
 
   Serial.begin(115200);
+
+  // I2C bus, address 8
+  Wire.begin(8);
+  Wire.onReceive(recieveEvent);
+
   start_time_ms = millis();
   startPosition = motorEncoder.read(); // Record starting position
-  commTestState = 1;
+  currentState = commTestState;
 }
 
 void loop() {
@@ -70,10 +91,43 @@ void loop() {
 
   // Read current position in counts
   long positionCounts = motorEncoder.read() - startPosition;
-  // Calculate remaining rotation and run the if statement 
-  float rotationRadians = (positionCounts * inchesPerCount) / wheelbaseRadius;
-  float remainingRotation = desiredRotationRadians - rotationRadians;
-  
+
+  switch(currentState) {
+    case(commTestState) {
+      int test = 0;
+      if(newData) {
+        recievedData = readData;
+        newData = false;
+      }
+      if(recievedData != test) {
+        currentState = initialRotationState;
+        break;
+      }
+      currentState = commTestState;
+      break;
+    }
+    case(initialRotationState) {
+      float rotationRadians = (positionCounts * inchesPerCount) / wheelbaseRadius;
+
+      break;
+    }
+    case(qrFoundState) {
+      break;
+    }
+    case(moveCycleState) {
+      break;
+    }
+    case(arrowReadState) {
+      break;
+    }
+    case(arrowRotationState) {
+      break;
+    }
+    case(continuedRotationState) {
+      break;
+    }
+  }
+  /*
   if (remainingRotation > 0) {
     // Determine speed profile
     if (rotationRadians < accelerationPhase) { // acceleration phase, rotationRadians is less than acceleration phase
@@ -151,5 +205,6 @@ void loop() {
     analogWrite(motor2PWM, 0);
     while (true); // Halt program
   }
+  */
   delay(5);
 }
