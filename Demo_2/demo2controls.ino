@@ -1,6 +1,11 @@
 #include <Encoder.h> // Use the Encoder library for handling encoders
 #include <Wire.h> // Include the Wire library for I2C
 
+// Variables for I2C transfer 
+volatile bool newData = false;
+volatile uint8_t readData = 0;
+uint8_t recievedData = 0;
+
 const float wheelDiameterInches = 6.0;
 const float wheelbaseDiameterInches = 15.0; // Distance between wheels
 const float countsPerRevolution = 64 * 50; // Encoder resolution * gear ratio
@@ -48,6 +53,16 @@ const int arrowReadState = 5; // Transfer arrow data to arduino, move on
 const int arrowRotationState = 6; // Rotation 90 degrees left, right, or catch error, move on
 const int continuedRotationState = 7; // Start rotation again, loop back to qrFoundState once found
 
+void receiveEvent(int howMany) {
+  while (Wire.available()) {
+    readData = Wire.read();
+    newData = true;
+  }
+  // Clear the buffer
+  while (Wire.available()){
+    Wire.read();
+  }
+}
 
 void setup() {
   // put your setup code here, to run once:
@@ -60,6 +75,11 @@ void setup() {
   digitalWrite(motorEnable, HIGH); // Enable motor driver
 
   Serial.begin(115200);
+
+  // I2C bus, address 8
+  Wire.begin(8);
+  Wire.onReceive(recieveEvent);
+
   start_time_ms = millis();
   startPosition = motorEncoder.read(); // Record starting position
   currentState = commTestState;
@@ -71,15 +91,24 @@ void loop() {
 
   // Read current position in counts
   long positionCounts = motorEncoder.read() - startPosition;
-  // Calculate remaining rotation and run the if statement 
-  float rotationRadians = (positionCounts * inchesPerCount) / wheelbaseRadius;
-  float remainingRotation = desiredRotationRadians - rotationRadians;
 
   switch(currentState) {
     case(commTestState) {
+      int test = 0;
+      if(newData) {
+        recievedData = readData;
+        newData = false;
+      }
+      if(recievedData != test) {
+        currentState = initialRotationState;
+        break;
+      }
+      currentState = commTestState;
       break;
     }
     case(initialRotationState) {
+      float rotationRadians = (positionCounts * inchesPerCount) / wheelbaseRadius;
+
       break;
     }
     case(qrFoundState) {
