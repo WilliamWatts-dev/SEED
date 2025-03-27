@@ -75,10 +75,21 @@ try:
         rvec = rvecs[closest_marker_idx]
         tvec = tvecs[closest_marker_idx][0] #[x,y,z]
 
+        # Create rotation matrix R from rvec
+        R, _ = cv2.Rodrigues(rvec)
 
+        # Extract the projection of the marker X axis relative to camera Z axis
+        x_axis_projection = R[2,0]
 
+        # Get the angle between X axis projection and camera Z axis
+        theta_x = np.arccos(x_axis_projection)
+        theta_x_deg = np.degrees(theta_x)
 
+        # Calculate turn right and left angles (may need to flip)
+        turn_right_angle = 90 - theta_x_deg  # Turn right to align X-axis to camera Z-axis
+        turn_left_angle = theta_x_deg - 90  # Turn left to align X-axis to opposite direction
 
+        
 
 
 
