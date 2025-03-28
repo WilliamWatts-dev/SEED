@@ -50,8 +50,9 @@ const int initialRotationState = 2; // Start rotation, once qr is found, move on
 const int qrFoundState = 3; // Transfer initial desired angle + feet, move on
 const int moveCycleState = 4; // Initiate loop on moving towards qr until at least 1.5 feet away then stop, move on
 const int arrowReadState = 5; // Transfer arrow data to arduino, move on
-const int arrowRotationState = 6; // Rotation 90 degrees left, right, or catch error, move on
-const int continuedRotationState = 7; // Start rotation again, loop back to qrFoundState once found
+const int turnLeftState = 6; // Rotation 90 degrees left
+const int turnRightState = 7; // Rotation 90 degrees right
+const int continuedRotationState = 8; // Start rotation again, loop back to qrFoundState once found
 
 void receiveEvent(int howMany) {
   while (Wire.available()) {
@@ -108,22 +109,34 @@ void loop() {
     }
     case(initialRotationState) {
       float rotationRadians = (positionCounts * inchesPerCount) / wheelbaseRadius;
-
+      // Need to know if robot detects beacon while spinning. Once there is newData ie angle, break and move on
+      // Robot will spij 360 degrees
       break;
     }
     case(qrFoundState) {
+      // Finish rotation to 0 degrees, continously take angle as it adjusts
       break;
     }
     case(moveCycleState) {
+      // Adjust specified PWM values accordig to positive or negative angle. Implementing negative feedback, along with the bulk of movement code
+      // Continously recieve angle + distance
+      // Break at remainingdistance <= 1.5 ft
       break;
     }
     case(arrowReadState) {
+      //Complete stop at beginning of this state or end of last. Recieve arrow data
+      // literally an if statement
       break;
     }
-    case(arrowRotationState) {
+    case(turnLeftState) {
+      // No data needed, for this and next, rotate until remaing = 0
+      break;
+    }
+    case(turnRightState) {
       break;
     }
     case(continuedRotationState) {
+      // Probably won't use this in demo 2
       break;
     }
   }
