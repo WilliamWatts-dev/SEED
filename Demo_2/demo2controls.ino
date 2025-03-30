@@ -3,8 +3,8 @@
 
 // Variables for I2C transfer 
 volatile bool newData = false;
-volatile uint8_t readData = 0;
-uint8_t recievedData = 0;
+volatile uint8_t readData = 0; // Read From bus
+uint8_t readFeet, readAngle, readColor;
 
 const float wheelDiameterInches = 6.0;
 const float wheelbaseDiameterInches = 15.0; // Distance between wheels
@@ -95,26 +95,76 @@ void loop() {
 
   switch(currentState) {
     case(commTestState) {
-      int test = 0;
-      if(newData) {
-        recievedData = readData;
-        newData = false;
-      }
-      if(recievedData != test) {
-        currentState = initialRotationState;
+      Wire.beginTransmission(8);
+      byte test = Wire.endTransmission();
+      if(test != 0) {
+        currentState = commTestState;
+        Serial.println("I2C Error")
         break;
       }
-      currentState = commTestState;
-      break;
+      else {
+        currentState = initialRotationState;
+        Serial.println("I2C Found!");
+        Serial.println("Entering initial rotation state.");
+      }
     }
     case(initialRotationState) {
       float rotationRadians = (positionCounts * inchesPerCount) / wheelbaseRadius;
+      float remainingRotation = desiredRotationRadians - rotationRadians;
       // Need to know if robot detects beacon while spinning. Once there is newData ie angle, break and move on
-      // Robot will spij 360 degrees
+      // Robot will spin 360 degrees
+      if (remainingRotation > 0) {
+        // Determine speed profile
+        if (rotationRadians < accelerationPhase) { // acceleration phase, rotationRadians is less than acceleration phase
+          // Acceleration phase
+          currentSpeed += accelerationRate * 0.01;
+          if (currentSpeed > maxSpeed) {
+            currentSpeed = maxSpeed;
+          }
+        } else if (rotationRadians > decelerationPhase) { // deceleration phase, rotationRadians is greater than deceleration phase
+          currentSpeed -= accelerationRate * 0.01;
+          if (currentSpeed < minSpeed) {
+            currentSpeed = minSpeed;
+          }
+        } 
+        else if ( accelerationPhase < rotationRadians && rotationRadians < decelerationPhase) { // hold phase, past acceleration but not into deceleration
+          // hold speed
+          currentSpeed = currentSpeed;
+        }
+        else { // stop phase, all other conditions fail
+          // Stop
+          currentSpeed = 0;
+
+        }
+
+        // Convert speed to motor voltage
+        float appliedVoltage = currentSpeed * Battery_Voltage / 2 / maxSpeed;
+        if (appliedVoltage > Battery_Voltage) appliedVoltage = Battery_Voltage / 2;
+
+        // Set motor directions for rotation
+        digitalWrite(motor1Dir, LOW);  // Motor 1 forward
+        digitalWrite(motor2Dir, HIGH); // Motor 2 backward
+
+        // Apply PWM signal
+        int pwmValue = min(abs(appliedVoltage) * 255 / Battery_Voltage, 255);
+        analogWrite(motor1PWM, pwmValue*1.03);
+        analogWrite(motor2PWM, pwmValue*0.85);
+        if(newData == true) {
+          postRotation = positionCounts;
+          currentState = qrFoundState;
+          readFeet = (readData >> 4) & 0x0F;
+          readAngle = (readData >> 1) & 0x07;
+          readColor = readData & 0x01;
+          Serial.println("QR Found!");
+          Serial.println("Switching to QR found state.");
+          break;
+        }
+      }
       break;
     }
     case(qrFoundState) {
       // Finish rotation to 0 degrees, continously take angle as it adjusts
+      desiredAngle = readAngle;
       break;
     }
     case(moveCycleState) {
