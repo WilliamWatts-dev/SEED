@@ -1,11 +1,15 @@
 #include <Encoder.h> // Use the Encoder library for handling encoders
 #include <Wire.h> // Include the Wire library for I2C
 
-// Variables for I2C transfer 
+// Variables for I2C transfer
+uint8_t dataBuffer[9]; // Buffer for 9 bytes: 4 (distance) + 4 (angle) + 1 (color)
 volatile bool newData = false;
 volatile uint8_t readData = 0; // Read From bus
-uint8_t readFeet, readAngle, readColor;
+volatile uint8_t readFeet = 0.0;
+volatile uint8_t readAngle = 0.0;
+volatile uint8_t readColor = 0;
 
+// Robot constants
 const float wheelDiameterInches = 6.0;
 const float wheelbaseDiameterInches = 15.0; // Distance between wheels
 const float countsPerRevolution = 64 * 50; // Encoder resolution * gear ratio
@@ -54,10 +58,27 @@ const int turnRightState = 7; // Rotation 90 degrees right
 const int continuedRotationState = 8; // Start rotation again, loop back to qrFoundState once found
 
 void receiveEvent(int howMany) {
-  while (Wire.available()) {
-    readData = Wire.read();
+  if (Wire.available() >= 9 {
+    for (int i = 0; i < 9; i++) {
+      dataBuffer[i] = Wire.read();
+    }
     newData = true;
   }
+  
+  while (Wire.available()) { // clears any extra bytes
+    Wire.read();
+  }
+}
+  
+
+  // Debug print statements
+  Serial.print("I2C Received - Feet: ");
+  Serial.print(readFeet);
+  Serial.print(", Angle: ");
+  Serial.print(readAngle);
+  Serial.print(", Color: ");
+  Serial.println(readColor ? "Red/Right" : "Green/Left");
+}
   // Clear the buffer
   while (Wire.available()){
     Wire.read();
@@ -151,6 +172,12 @@ void forward(float feet, long posCounts) {
     analogWrite(motor2PWM, (pwmValue*0.945));
   }
 
+// Function to determine rotation direction based on angle
+bool determineRotationDirection(float angle) {
+  // If angle is positive, turn right (dir = true)
+  // If angle is negative, turn left (dir = false)
+  return angle >= 0;
+}
 
 void setup() {
   // put your setup code here, to run once:
@@ -193,34 +220,57 @@ void loop() {
     }
     case(initialRotationState): {
         long positionCounts = motorEncoder.read() - startPosition;
-        rotate(360, positionCounts, 1);
+        rotate(360, positionCounts, true); // rotates clockwise because of true
+        // If we receive data, move to next state
         if(newData == true) {
-          postRotation1 = positionCounts;
-          currentState = qrFoundState;
-          // Extract bits and store in the following 3 variables
-          // IMPORTANT: Figure out conversions and bit interpretations with CV code
-          readFeet = (readData >> 4) & 0x0F;
-          readAngle = (readData >> 1) & 0x07;
-          readColor = readData & 0x01;
-          newData = false;
-          Serial.println("QR Found!");
-          Serial.println("Switching to QR found state.");
-          break;
-        }
+        // Extract data from buffer
+        memcpy(&readFeet, dataBuffer, 4);
+        memcpy(&readAngle, dataBuffer+4, 4);
+        readColor = dataBuffer[8] & 0x01;
+        
+        Serial.print("Received - Distance: ");
+        Serial.print(readFeet);
+        Serial.print("ft, Angle: ");
+        Serial.print(readAngle);
+        Serial.print("°, Color: ");
+        Serial.println(readColor ? "Red" : "Green");
+        
+        newData = false;
+        postRotation1 = positionCounts;
+        currentState = qrFoundState;
+
+        debugPrint("Aruco marker found! Switching to marker align state");
+        debugPrint("Distance: " + String(readFeet) + "ft, Angle: " + String(readAngle) + "deg");
+        break;
       }
       break;
+  }
     case(qrFoundState): {
       // Finish rotation to 0 degrees
       long positionCounts = motorEncoder.read() - postRotation1;
+      // Update data if new information received
       if(newData == true) {
-        readFeet = (readData >> 4) & 0x0F;
-        readAngle = (readData >> 1) & 0x07;
-        readColor = readData & 0x01;
+        // Extract data from buffer
+        memcpy(&readFeet, dataBuffer, 4);
+        memcpy(&readAngle, dataBuffer+4, 4);
+        readColor = dataBuffer[8] & 0x01;
+        
+        Serial.print("Updated - Distance: ");
+        Serial.print(readFeet);
+        Serial.print("ft, Angle: ");
+        Serial.print(readAngle);
+        Serial.print("°, Color: ");
+        Serial.println(readColor ? "Red" : "Green");
+        
         newData = false;
       }
+      
       // Need a way to determine dir, maybe unnecessary
-      bool dir;
-      rotate(readAngle, positionCounts, dir);
+      bool dir = determineRotationDirection(readAngle);
+
+      // Rotate to align with the marker
+      rotate(abs(readAngle), positionCounts, dir);
+      
       if(readAngle <= 0.001) {
         currentState = moveCycleState;
         postFoundRotation = positionCounts;
@@ -234,18 +284,33 @@ void loop() {
     case(moveCycleState): {
       // Adjust specified PWM values accordig to positive or negative angle. Implementing negative feedback
       long positionCounts = motorEncoder.read() - postFoundRotation;
-      // Continously recieve angle + distance
+      
+      // Update data if new information received
       if(newData == true) {
-        readFeet = (readData >> 4) & 0x0F;
-        readAngle = (readData >> 1) & 0x07;
-        readColor = readData & 0x01;
+        // Extract data from buffer
+        memcpy(&readFeet, dataBuffer, 4);
+        memcpy(&readAngle, dataBuffer+4, 4);
+        readColor = dataBuffer[8] & 0x01;
+        
+        Serial.print("Updated - Distance: ");
+        Serial.print(readFeet);
+        Serial.print("ft, Angle: ");
+        Serial.print(readAngle);
+        Serial.print("°, Color: ");
+        Serial.println(readColor ? "Red" : "Green");
+        
         newData = false;
       }
       // Pretty sure readFeet will be the remaining distance to the beacon
+      
       //IMPORTANT: Solution to determining dir, predict overshoot?
-      bool dir;
-      rotate(readAngle, positionCounts, dir);
-      forward(readFeet, positionCounts);
+      bool dir = determineRotationDirection(readAngle);
+
+      if(abs(readAngle) > 3.0) { // If we're off by more than 3 degrees
+        rotate(readAngle, positionCounts, dir);
+      } else { // Move forward
+        forward (readFeet, positionCounts);
+
       // Break at remainingdistance <= 1.5 ft
       if(readFeet <= 1.5) {
         currentState = arrowReadState;
@@ -260,30 +325,45 @@ void loop() {
     }
     case(arrowReadState): {
       //Complete stop at beginning of this state or end of last. Recieve arrow data
+      // Read the arrow color/direction
       if(newData == true) {
-        readFeet = (readData >> 4) & 0x0F;
-        readAngle = (readData >> 1) & 0x07;
-        readColor = readData & 0x01;
+        // Extract data from buffer
+        memcpy(&readFeet, dataBuffer, 4);
+        memcpy(&readAngle, dataBuffer+4, 4);
+        readColor = dataBuffer[8] & 0x01;
+        
+        Serial.print("Arrow Data - Distance: ");
+        Serial.print(readFeet);
+        Serial.print("ft, Angle: ");
+        Serial.print(readAngle);
+        Serial.print("°, Color: ");
+        Serial.println(readColor ? "Red" : "Green");
+        
         newData = false;
-        if(readColor == 1) {
+        
+        if(readColor == 1) { // Red = right
           currentState = turnRightState;
           Serial.println("Recieved: Right");
           Serial.println("Switching to Turn Right State");
-          break;
+        } else { // Green = left
+          currentState = turnLeftState;
+          Serial.println("Received: Left");
+          Serial.println("Switching to Turn Left State");
         }
+          break;
       }
       break;
     }
     case(turnLeftState): {
       // No data needed, for this and next, rotate until remaining = 0
       long positionCounts = motorEncoder.read() - postApproachRotation;
-      rotate(90, positionCounts, 1);
+      rotate(90, positionCounts, false); // false = left
       while(true); // and finally stop
       break;
     }
     case(turnRightState): {
       long positionCounts = motorEncoder.read() - postApproachRotation;
-      rotate(90, positionCounts, 0);
+      rotate(90, positionCounts, true); // true = right
       while(true); // and finally stop
       break;
     }
