@@ -110,9 +110,31 @@ def camera_thread():
             # Store closest marker into rvec & tvec
             rvec = rvecs[closest_marker_idx]
             tvec = tvecs[closest_marker_idx][0] #[x,y,z]
+
+            # Update distance
+            distance = tvec[2]
+
+            # Update camera_angle
+            camera_angle_rad = np.arctan2(tvec[0], tvec[2])
+            camera_angle = np.degrees(angle_rad)
+
+            # Create rotation matrix R from rvec
+            R, _ = cv2.Rodrigues(rvec)
     
+            # Extract the projection of the marker X axis relative to camera Z axis
+            ##x_axis_projection = R[2,0]
+    
+            # Get the angle between X axis projection and camera Z axis
+            ##theta_x = np.arccos(x_axis_projection)
+            ##theta_x_deg = np.degrees(theta_x)
+    
+            # Calculate turn right and left angles (may need to flip)
+            ##turn_right_angle = 90 - theta_x_deg  # Turn right to align X-axis to camera Z-axis
+            ##turn_left_angle = theta_x_deg - 90  # Turn left to align X-axis to opposite direction;
 
-
+            # Calculate the angle between the camera Z axis and marker Z axis (should give yaw of 180 deg when aligned)
+            yaw_angle_rad = np.arccos(R[2,2])
+            yaw_angle = np.degrees(yaw_angle_rad)
 
 
 
