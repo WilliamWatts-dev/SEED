@@ -18,6 +18,7 @@ from smbus2 import SMBus
 import board
 from time import sleep
 import logging
+import struct
 
 
 # GLOBAL VARS
@@ -104,21 +105,21 @@ def detect_color(frame):
 
 # Function to send data to Arduino
 def send_data_to_arduino(distance_feet, angle_degrees, color_code):
-    # Pack data into a single byte
-    # Distance: 4 bits - values 0-15
-    # Angle: 3 bits (bits 1-3) - values 0-7
-    # Color: 1 bit (bit 0) - 0 for green, 1 for red
-    
-    # Convert and clamp values
-    distance_int = min(max(int(distance_feet), 0), 15)  # 4 bits max (0-15)
-    angle_int = min(max(int(abs(angle_degrees)), 0), 7)  # 3 bits max (0-7)
-    
-    # Pack data: [distance (4 bits)][angle (3 bits)][color (1 bit)]
-    data_byte = (distance_int << 4) | (angle_int << 1) | color_code
+    # Pack distance as a 4-byte float
+    distance_bytes - struct.pack('f', float(distance_feet))
+
+    # Pack angle as a 4-byte float
+    angle_bytes = struct.pack('f', float(angle_degrees))
+
+    # Pack color as a single byte
+    color_byte - bytes([color_code & 0x01])
+
+    # Combine data
+    combined_data = list(distance_bytes + angle_bytes + color_byte)
     
     try:
-        bus.write_byte(ARD_ADDR, data_byte)
-        logging.info(f"Sent to Arduino: dist={distance_int}ft, angle={angle_int}°, color={color_code}")
+        bus.write_i2c_block_data(ARD_ADDR, 0, combined_data)
+        logging.info(f"Sent to Arduino: dist={distance_feet}ft, angle={angle_degrees}°, color={'Red' if color_code else 'Green'}")
     except Exception as e:
         logging.error(f"I2C Error: {e}")
 
