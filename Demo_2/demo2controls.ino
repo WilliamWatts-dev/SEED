@@ -216,6 +216,7 @@ void loop() {
         currentState = initialRotationState;
         Serial.println("I2C Found!");
         Serial.println("Entering initial rotation state.");
+        break;
       }
     }
     case(initialRotationState): {
