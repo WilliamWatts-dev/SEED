@@ -4,8 +4,11 @@
 // Variables for I2C transfer 
 volatile bool newData = false;
 volatile uint8_t readData = 0; // Read From bus
-uint8_t readFeet, readAngle, readColor;
+volatile uint8_t readFeet;
+volatile uint8_t readAngle;
+volatile uint8_t readColor;
 
+// Robot constants
 const float wheelDiameterInches = 6.0;
 const float wheelbaseDiameterInches = 15.0; // Distance between wheels
 const float countsPerRevolution = 64 * 50; // Encoder resolution * gear ratio
@@ -55,9 +58,25 @@ const int continuedRotationState = 8; // Start rotation again, loop back to qrFo
 
 void receiveEvent(int howMany) {
   while (Wire.available()) {
+    // Reads the byta containing all of our transmitted data
     readData = Wire.read();
+
+    // Extract the components from the packed data
+    // [distance (4 bits)][angle (3 bits)][color (1 bit)]
+    readFeet = (readData >> 4) & 0x0F;   // Extract bits 4-7
+    readAngle = (readData >> 1) & 0x07;  // Extract bits 1-3
+    readColor = readData & 0x01;         // Extract bit 0 (LSB)
     newData = true;
-  }
+  
+
+  // Debug print statements
+  Serial.print("I2C Received - Feet: ");
+  Serial.print(readFeet);
+  Serial.print(", Angle: ");
+  Serial.print(readAngle);
+  Serial.print(", Color: ");
+  Serial.println(readColor ? "Red/Right" : "Green/Left");
+}
   // Clear the buffer
   while (Wire.available()){
     Wire.read();
