@@ -40,6 +40,88 @@ if not cap.isOpened():
     raise IOError("Cannot open webcam")
 print("Press 'q' in any window to quit")
 
+# Moving average filter for smoothing distance and angle readings
+class MovingAverage:
+    def __init__(self, window_size=5):
+        self.window_size = window_size
+        self.values = []
+        
+    def update(self, value):
+        self.values.append(value)
+        if len(self.values) > self.window_size:
+            self.values.pop(0)
+        return self.get_average()
+    
+    def get_average(self):
+        if not self.values:
+            return 0
+        return sum(self.values) / len(self.values)
+
+# Initialize moving averages for distance and angle
+distance_avg = MovingAverage()
+angle_avg = MovingAverage()
+
+# Function to detect color (red or green)
+def detect_color(frame):
+    # Convert to HSV color space
+    hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
+    
+    # Define range for red color (Hue wraps around in HSV)
+    lower_red1 = np.array([0, 100, 100])
+    upper_red1 = np.array([10, 255, 255])
+    lower_red2 = np.array([160, 100, 100])
+    upper_red2 = np.array([180, 255, 255])
+    
+    # Define range for green color
+    lower_green = np.array([40, 50, 50])
+    upper_green = np.array([90, 255, 255])
+    
+    # Create masks
+    red_mask1 = cv2.inRange(hsv, lower_red1, upper_red1)
+    red_mask2 = cv2.inRange(hsv, lower_red2, upper_red2)
+    red_mask = cv2.bitwise_or(red_mask1, red_mask2)
+    green_mask = cv2.inRange(hsv, lower_green, upper_green)
+    
+    # Apply morphological operations to reduce noise
+    kernel = np.ones((5, 5), np.uint8)
+    red_mask = cv2.morphologyEx(red_mask, cv2.MORPH_OPEN, kernel)
+    red_mask = cv2.morphologyEx(red_mask, cv2.MORPH_CLOSE, kernel)
+    green_mask = cv2.morphologyEx(green_mask, cv2.MORPH_OPEN, kernel)
+    green_mask = cv2.morphologyEx(green_mask, cv2.MORPH_CLOSE, kernel)
+    
+    # Calculate area of each color
+    red_area = cv2.countNonZero(red_mask)
+    green_area = cv2.countNonZero(green_mask)
+    
+    # Determine dominant color (1 for red, 0 for green)
+    color_code = 1 if red_area > green_area and red_area > 500 else 0
+    
+    # For visualization
+    red_result = cv2.bitwise_and(frame, frame, mask=red_mask)
+    green_result = cv2.bitwise_and(frame, frame, mask=green_mask)
+    
+    return color_code, red_result, green_result, red_area, green_area
+
+# Function to send data to Arduino
+def send_data_to_arduino(distance_feet, angle_degrees, color_code):
+    # Pack data into a single byte
+    # Distance: 4 bits - values 0-15
+    # Angle: 3 bits (bits 1-3) - values 0-7
+    # Color: 1 bit (bit 0) - 0 for green, 1 for red
+    
+    # Convert and clamp values
+    distance_int = min(max(int(distance_feet), 0), 15)  # 4 bits max (0-15)
+    angle_int = min(max(int(abs(angle_degrees)), 0), 7)  # 3 bits max (0-7)
+    
+    # Pack data: [distance (4 bits)][angle (3 bits)][color (1 bit)]
+    data_byte = (distance_int << 4) | (angle_int << 1) | color_code
+    
+    try:
+        bus.write_byte(ARD_ADDR, data_byte)
+        logging.info(f"Sent to Arduino: dist={distance_int}ft, angle={angle_int}°, color={color_code}")
+    except Exception as e:
+        logging.error(f"I2C Error: {e}")
+
 try:
     while True:
         
@@ -62,7 +144,18 @@ try:
 
         # Detect markers
         corners, ids, rejected = aruco.detectMarkers(gray, aruco_dict, parameters=parameters)
-     
+
+        # Detect color
+        color_code, red_vis, green_vis, red_area, green_area = detect_color(dst)
+
+        # Add color information to display
+        cv2.putText(display_frame, f"Red area: {red_area}", (10, 30), 
+                   cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
+        cv2.putText(display_frame, f"Green area: {green_area}", (10, 60), 
+                   cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
+        cv2.putText(display_frame, f"Color code: {color_code}", (10, 90), 
+                   cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 0, 255), 2)
+        
         # Catch if marker not detected
         if ids is None or corners is None:
             cv2.imshow('Aruco Detection', dst)
@@ -74,6 +167,38 @@ try:
         # Store closest marker into rvec & tvec
         rvec = rvecs[closest_marker_idx]
         tvec = tvecs[closest_marker_idx][0] #[x,y,z]
+
+        # Draw axes for the closest marker
+            cv2.drawFrameAxes(display_frame, camera_matrix, dist_coeffs, 
+                             rvec, tvec, 0.03)
+            
+            # Calculate distance in feet (assuming marker size is in meters)
+            # Z-component of tvec is the distance in marker size units
+            distance_meters = tvec[2]
+            distance_feet = distance_meters * 3.28084  # Convert meters to feet
+            
+            # Smooth distance with moving average
+            smoothed_distance = distance_avg.update(distance_feet)
+            
+            # Calculate angle (horizontal offset from center)
+            # X-component is the horizontal offset
+            # Negative angle means target is to the left, positive to the right
+            angle_radians = math.atan2(tvec[0], tvec[2])
+            angle_degrees = math.degrees(angle_radians)
+            
+            # Smooth angle with moving average
+            smoothed_angle = angle_avg.update(angle_degrees)
+            
+            # Send data to Arduino
+            send_data_to_arduino(smoothed_distance, smoothed_angle, color_code)
+            
+            # Display info
+            cv2.putText(display_frame, f"Marker ID: {marker_id}", (10, 120), 
+                       cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 0, 0), 2)
+            cv2.putText(display_frame, f"Distance: {smoothed_distance:.2f} ft", (10, 150), 
+                       cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 0, 0), 2)
+            cv2.putText(display_frame, f"Angle: {smoothed_angle:.2f} deg", (10, 180), 
+                       cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 0, 0), 2)
 
 
 
