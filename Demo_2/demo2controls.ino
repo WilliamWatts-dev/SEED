@@ -4,9 +4,9 @@
 // Variables for I2C transfer 
 volatile bool newData = false;
 volatile uint8_t readData = 0; // Read From bus
-volatile uint8_t readFeet;
-volatile uint8_t readAngle;
-volatile uint8_t readColor;
+volatile uint8_t readFeet = 0;
+volatile uint8_t readAngle = 0;
+volatile uint8_t readColor = 0;
 
 // Robot constants
 const float wheelDiameterInches = 6.0;
@@ -61,11 +61,9 @@ void receiveEvent(int howMany) {
     // Reads the byta containing all of our transmitted data
     readData = Wire.read();
 
-    // Extract the components from the packed data
+    // Extract the components from the packed data in each state
     // [distance (4 bits)][angle (3 bits)][color (1 bit)]
-    readFeet = (readData >> 4) & 0x0F;   // Extract bits 4-7
-    readAngle = (readData >> 1) & 0x07;  // Extract bits 1-3
-    readColor = readData & 0x01;         // Extract bit 0 (LSB)
+    
     newData = true;
   
 
