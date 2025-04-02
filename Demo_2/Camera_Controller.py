@@ -30,6 +30,7 @@ from time import sleep
 import logging
 import struct
 import threading
+import math
 from pathlib import Path
 
 
@@ -52,7 +53,7 @@ logging.basicConfig(
 )
 
 # Initialize SMBus library with I2C bus 1
-bus = SMBUS(1)
+bus = SMBus(1)
 
 # Initialize Aruco detection
 aruco_dict = aruco.getPredefinedDictionary(aruco.DICT_6X6_250)
@@ -63,6 +64,15 @@ cap = cv2.VideoCapture(0)
 if not cap.isOpened():
     raise IOError("Cannot open webcam")
 print("Press 'q' in any window to quit")
+
+# Get local path
+script_directory = Path(__file__).resolve().parent
+calibration_directory = script_directory / "camera_calibration.npz"
+
+# Get camera matrix from camera_calibration.npz
+with np.load(calibration_directory) as data:
+    camera_matrix = data['camera_matrix.npy']
+    dist_coeffs = data['dist_coeffs.npy']
 
 # Moving average filter for smoothing distance and angle readings
 class MovingAverage:
@@ -146,55 +156,68 @@ def send_data_to_arduino(distance_feet, angle_degrees, color_code):
     except Exception as e:
         logging.error(f"I2C Error: {e}")
 
-try:
-    while True:
+
+# Thread 1: Camera Processing thread
+# Capture frame and update yaw_angle, camera_angle, distance, state(,turn_angle & flags)
+def camera_thread():
+    global yaw_angle, camera_angle, distance, state
+
+    # Initialize camera
+    cap = cv2.VideoCapture(0)
+    if not cap.isOpened():
+        raise IOError("Cannot open webcam")
+    print("Press 'q' in any window to quit")
+
+
+    try:
+        while True:
         
-        # Break loop with 'q' key
-        k = cv2.waitKey(1) & 0xFF
-        if k == ord('q'):
-            break
+            # Break loop with 'q' key
+            k = cv2.waitKey(1) & 0xFF
+            if k == ord('q'):
+                break
 
-        # Capture frame
-        ret, frame = cap.read()
-        if not ret:
-            logging.error("Failed to grab frame")
-            break
+            # Capture frame
+            ret, frame = cap.read()
+            if not ret:
+                logging.error("Failed to grab frame")
+                break
         
-        # Undistort frame
-        dst = cv2.undistort(frame, camera_matrix, dist_coeffs)
+            # Undistort frame
+            dst = cv2.undistort(frame, camera_matrix, dist_coeffs)
 
-        # Convert to grayscale
-        gray = cv2.cvtColor(dst, cv2.COLOR_BGR2GRAY)
+            # Convert to grayscale
+            gray = cv2.cvtColor(dst, cv2.COLOR_BGR2GRAY)
 
-        # Detect markers
-        corners, ids, rejected = aruco.detectMarkers(gray, aruco_dict, parameters=parameters)
+            # Detect markers
+            corners, ids, rejected = aruco.detectMarkers(gray, aruco_dict, parameters=parameters)
 
-        # Detect color
-        color_code, red_vis, green_vis, red_area, green_area = detect_color(dst)
+            # Detect color
+            color_code, red_vis, green_vis, red_area, green_area = detect_color(dst)
 
-        # Add color information to display
-        cv2.putText(display_frame, f"Red area: {red_area}", (10, 30), 
-                   cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
-        cv2.putText(display_frame, f"Green area: {green_area}", (10, 60), 
-                   cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
-        cv2.putText(display_frame, f"Color code: {color_code}", (10, 90), 
-                   cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 0, 255), 2)
+            # Add color information to display
+            cv2.putText(display_frame, f"Red area: {red_area}", (10, 30), 
+                       cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
+            cv2.putText(display_frame, f"Green area: {green_area}", (10, 60), 
+                       cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
+            cv2.putText(display_frame, f"Color code: {color_code}", (10, 90), 
+                       cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 0, 255), 2)
         
-        # Catch if marker not detected
-        if ids is None or corners is None:
-            cv2.imshow('Aruco Detection', dst)
-            continue
+            # Catch if marker not detected
+            if ids is None or corners is None:
+                cv2.imshow('Aruco Detection', dst)
+                continue
 
-        # Determine index of closest marker
-        closest_marker_idx = np.argmin(tvecs[:, 0, 2])
+            # Determine index of closest marker
+            closest_marker_idx = np.argmin(tvecs[:, 0, 2])
 
-        # Store closest marker into rvec & tvec
-        rvec = rvecs[closest_marker_idx]
-        tvec = tvecs[closest_marker_idx][0] #[x,y,z]
+            # Store closest marker into rvec & tvec
+            rvec = rvecs[closest_marker_idx]
+            tvec = tvecs[closest_marker_idx][0] #[x,y,z]
 
-        # Draw axes for the closest marker
+            # Draw axes for the closest marker
             cv2.drawFrameAxes(display_frame, camera_matrix, dist_coeffs, 
-                             rvec, tvec, 0.03)
+                         rvec, tvec, 0.03)
             
             # Calculate distance in feet (assuming marker size is in meters)
             # Z-component of tvec is the distance in marker size units
@@ -223,3 +246,26 @@ try:
                        cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 0, 0), 2)
             cv2.putText(display_frame, f"Angle: {smoothed_angle:.2f} deg", (10, 180), 
                        cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 0, 0), 2)
+        else:
+            pass
+
+        cv2.imshow('Aruco Detection', display_frame)
+        cv2.imshow('Red Mask', red_vis)
+        cv2.imshow('Green Mask', green_vis)
+
+except KeyboardInterrupt:
+        print("Program interrupted by user")
+except Exception as e:
+        logging.error(f"Error: {e}")
+finally:
+        # Clean up
+        cap.release()
+        cv2.destroyAllWindows
+        print("Program Terminated")
+
+
+
+
+    
+
+
