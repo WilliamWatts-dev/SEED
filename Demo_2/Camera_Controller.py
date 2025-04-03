@@ -208,6 +208,10 @@ def camera_thread():
                 cv2.imshow('Aruco Detection', dst)
                 continue
 
+            # Estimate pose for detected markers
+            marker_length = ??  # Define marker length in same units used for camera_matrix
+            rvecs, tvecs, _ = cv2.aruco.estimatePoseSingleMarkers(corners, marker_length, camera_matrix, dist_coeffs)
+
             # Determine index of closest marker
             closest_marker_idx = np.argmin(tvecs[:, 0, 2])
 
