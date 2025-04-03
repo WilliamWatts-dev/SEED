@@ -9,13 +9,14 @@ import struct
 import threading
 import math
 from pathlib import Path
-
+import adafruit_character_lcd.character_lcd_rgb_i2c as character_lcd
+import queue
 
 # GLOBAL VARS
 HEIGHT = 480
 WIDTH = 640
 ARD_ADDR = 0x08
-#LCD_ADDR = 0x20
+LCD_ADDR = 0x20
 offset = 0
 yaw_angle = 0
 camera_angle = 0
@@ -23,6 +24,8 @@ distance = 0
 state = 1  # Initial state: marker not detected
 
 lock = threading.Lock()
+
+lcd_message = ''
 
 # Set up logging
 logging.basicConfig(
@@ -139,6 +142,55 @@ def send_data_to_arduino(distance_feet, angle_degrees, color_code):
         logging.info(f"Sent to Arduino: dist={distance_feet}ft, angle={angle_degrees}°, color={'Red' if color_code else 'Green'}")
     except Exception as e:
         logging.error(f"I2C Error: {e}")
+
+def init_i2c_lcd():
+    try:
+        i2c = board.I2C()
+        sleep(0.1) # give time for I2C to initialize
+
+        # create LCD object
+        lcd = character_lcd.Character_LCD_RGB_I2C(i2c, 16, 2, address=LCD_ADDR)
+        sleep(0.1)
+
+        # Test LCD
+        lcd.clear()
+        sleep(0.1)
+        lcd.color = [100, 0, 0]
+        logging.info("LCD initialized successfully")
+        return lcd
+    except Exception as e:
+        logging.error(f"LCD initialization failed: {e}")
+        raise
+
+def lcd_update_thread():
+    """Thread function to handle LCD updates"""
+    lcd = None
+    try:
+        lcd = init_i2c_lcd()
+
+        while True:
+            if lcd_message is not message:
+                message = lcd_queue.get()
+                if message == "STOP":
+                    break
+                try:
+                    lcd.clear()
+                    sleep(0.05)
+                    lcd.message = message
+                    logging.info(f"LCD updated with: {message}")
+                except Exception as e:
+                    logging.error(f"Error updating LCD: {e}")
+            sleep(0.1)  # Small delay to prevent busy-waiting
+
+    except Exception as e:
+        logging.error(f"LCD thread error: {e}")
+    finally:
+        if lcd:
+            try:
+                lcd.clear()
+                lcd.color = [0, 0, 0]
+            except Exception as e:
+                logging.error(f"LCD cleanup error: {e}")
 
 # Thread 1: Camera Processing thread
 # Capture frame and update yaw_angle, camera_angle, distance, state(,turn_angle & flags)
@@ -307,9 +359,15 @@ def main():
     comms = threading.Thread(target=communication_thread, name="CommsThread")
     comms.daemon = True
 
+    # Create LCD thread
+    lcd = threading.Thread(target=lcd_update_thread, name="LCD-Thread")
+    lcd.daemon = True
+
     # Start threads
     camera.start()
     comms.start()
+    lcd.start()
+    
 
     try:
         # Keep main thread alive
