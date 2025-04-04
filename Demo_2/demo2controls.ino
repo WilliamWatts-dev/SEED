@@ -36,7 +36,7 @@ const int motorEnable = 4; // Motor enable pin
 const float maxSpeed = 0.15; // Lower max speed to reduce overshoot
 const float minSpeed = 0.07;
 const float accelerationRate = 0.05;
-const float decelerationPhasefeet = 1.7; // decelerates for 1 - 0.55 = 0.45 or 45% of movement
+const float decelerationPhasefeet = 3; // decelerates for 1 - 0.55 = 0.45 or 45% of movement
 
 float currentSpeed = 0.0;
 long startPosition, currentPosition;
@@ -48,12 +48,6 @@ Encoder motor2Encoder(2, 5); // RIGHT
 // Timing variables
 unsigned long last_time_ms, start_time_ms;
 float current_time;
-
-// Global Encoder References
-long postRotation1;
-long postFoundRotation;
-long postApproachRotation;
-long lastPosition;
 
 // State Machine Variables in order of use
 int currentState = 0;
@@ -152,41 +146,46 @@ void rotate(float angle, long posCounts, bool dir) {
 void forward(float feet, long posCounts) {
     float positionFeet = (posCounts * inchesPerCount) / 12.0; // Convert counts to feet
     float remainingDistance = feet - positionFeet;
-    // Determine speed profile
-    if (remainingDistance > decelerationPhasefeet) {
-      // Acceleration phase
-      currentSpeed += accelerationRate * 0.01; // Increment speed
-      if (currentSpeed > maxSpeed) {
-        currentSpeed = maxSpeed;
+    if(remainingDistance > 0.1) {
+      // Determine speed profile
+      if (remainingDistance > decelerationPhasefeet) {
+        // Acceleration phase
+        currentSpeed += accelerationRate * 0.01; // Increment speed
+        if (currentSpeed > maxSpeed) {
+          currentSpeed = maxSpeed;
+        }
+      } else if (remainingDistance > 0) {
+        currentSpeed -= accelerationRate * 0.01;
+        if (currentSpeed < minSpeed) {
+          currentSpeed = minSpeed;
+        }
+      } else {
+        // Stop
+        currentSpeed = 0;
+        remainingDistance = 0;
       }
-    } else if (remainingDistance > 0) {
-      currentSpeed -= accelerationRate * 0.01;
-      if (currentSpeed < minSpeed) {
-        currentSpeed = minSpeed;
-      }
-    } else {
-      // Stop
-      currentSpeed = 0;
-      remainingDistance = 0;
-    }
-    // Convert speed to motor voltage
-    float appliedVoltage = currentSpeed * Battery_Voltage / 2 / maxSpeed;
-    if (appliedVoltage > Battery_Voltage) appliedVoltage = Battery_Voltage / 2;
+      // Convert speed to motor voltage
+      float appliedVoltage = currentSpeed * Battery_Voltage / 2 / maxSpeed;
+      if (appliedVoltage > Battery_Voltage) appliedVoltage = Battery_Voltage / 2;
 
-    // Set motor direction
-    digitalWrite(motor1Dir, appliedVoltage > 0 ? LOW : HIGH);
-    digitalWrite(motor2Dir, appliedVoltage > 0 ? LOW : HIGH);
-    // Apply PWM signal based on the voltage
-    float pwmValue = min(abs(appliedVoltage) * 255 / Battery_Voltage, 255);
-    analogWrite(motor1PWM, (pwmValue*1.04));
-    analogWrite(motor2PWM, (pwmValue*0.945));
+      // Set motor direction
+      digitalWrite(motor1Dir, appliedVoltage > 0 ? LOW : HIGH);
+      digitalWrite(motor2Dir, appliedVoltage > 0 ? LOW : HIGH);
+      // Apply PWM signal based on the voltage
+      float pwmValue = min(abs(appliedVoltage) * 255 / Battery_Voltage, 255);
+      analogWrite(motor1PWM, (pwmValue*1.04));
+      analogWrite(motor2PWM, (pwmValue*0.945));
+    }
+    else{ 
+      stop();
+    }
   }
 
 // Function to determine rotation direction based on angle
 bool determineRotationDirection(float angle) {
   // If angle is positive, turn right (dir = true)
   // If angle is negative, turn left (dir = false)
-  return angle >= 0;
+  return !(angle >= 0);
 }
 
 void setup() {
@@ -218,6 +217,7 @@ void loop() {
   float posL_rad, posR_rad;
   posL_rad = 2.0 * PI * (float)posL_counts / countsPerRevolution;
   posR_rad = 2.0 * PI * (float)posR_counts / countsPerRevolution;
+  /*
   float x_new, y_new, phi_new;
   float left_distance_new, right_distance_new, left_change, right_change;
   left_distance_new = wheelDiameterInches * posL_rad;
@@ -227,6 +227,7 @@ void loop() {
   phi_new = phi_old + ((1/wheelbaseDiameterInches) * (left_change - right_change)); //Changed one sign for direction correction
   x_new = x_old + (cos(phi_old) * (left_change + right_change) * 0.5);
   y_new = y_old + (sin(phi_old) * (left_change + right_change) * 0.5);
+  */
   //Position Tracking over
   current_time = (millis() - start_time_ms) / 1000.0;
   switch(currentState) {
@@ -268,6 +269,7 @@ void loop() {
             newData = false;
             currentState = qrFoundState;
             startPosition = motor1Encoder.read();
+            delay(3000);
 
             Serial.print("Aruco marker found! Switching to marker align state");
             Serial.println("Distance: " + String(readFeet) + "ft, Angle: " + String(readAngle) + "deg");
@@ -280,6 +282,7 @@ void loop() {
     case(qrFoundState): {
       // Finish rotation to 0 degrees
       // Update data if new information received
+      /*
       if(newData == true) {
         // Extract data from buffer
         memcpy(&readFeet, dataBuffer, 4);
@@ -295,19 +298,36 @@ void loop() {
         
         newData = false;
       }
+      */
       
       // Need a way to determine dir, maybe unnecessary
-      bool dir = determineRotationDirection(readAngle);
+      // bool dir = determineRotationDirection(readAngle);
 
       // Rotate to align with the marker
-      rotate(abs(readAngle), posL_rad, dir);
+      rotate(abs(readAngle), posL_rad, true);
       
       if(stopNchop) {
         currentState = moveCycleState;
-        //postFoundRotation = positionCounts;
+        stopNchop = 0;
+        if(newData == true) {
+        // Extract data from buffer
+          memcpy(&readFeet, dataBuffer, 4);
+          memcpy(&readAngle, dataBuffer+4, 4);
+          readColor = dataBuffer[8] & 0x01;
+          
+          Serial.print("Updated - Distance: ");
+          Serial.print(readFeet);
+          Serial.print("ft, Angle: ");
+          Serial.print(readAngle);
+          Serial.print("°, Color: ");
+          Serial.println(readColor ? "Red" : "Green");
+          
+          newData = false;
+        }
+        startPosition = motor1Encoder.read();
         Serial.println("Angle Corrected");
         Serial.println("Switching to Move Cycle State");
-        delay(250);
+        delay(1000);
         break;
       }
       break;
@@ -317,6 +337,7 @@ void loop() {
 
       
       // Update data if new information received
+      /**/
       if(newData == true) {
         // Extract data from buffer
         memcpy(&readFeet, dataBuffer, 4);
@@ -337,13 +358,14 @@ void loop() {
       //IMPORTANT: Solution to determining dir, predict overshoot?
       bool dir = determineRotationDirection(readAngle);
 
-      if(abs(readAngle) > 3.0) { // If we're off by more than 3 degrees
-        //rotate(readAngle, positionCounts, dir);
-      } else { // Move forward
-        //forward (readFeet, positionCounts);
+
+      forward (readFeet, posL_counts);
+      if(abs(readAngle) > 5.0) {
+        rotate(5,posL_rad,dir);
+      }
 
       // Break at remainingdistance <= 1.5 ft
-      if(readFeet <= 1.5) {
+      if(stopNchop) {
         currentState = arrowReadState;
         //postApproachRotation = positionCounts;
         Serial.println("Within 1.5 Feet");
@@ -399,11 +421,12 @@ void loop() {
       break;
     }
   }
+  /*
   phi_old = phi_new;
   x_old = x_new;
   y_old = y_new;
   left_distance_old = left_distance_new;
   right_distance_old = right_distance_new;
+  */
   delay(5);
-}
 }
