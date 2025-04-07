@@ -14,3 +14,5 @@
 - **demo2controls.ino** - Main arduino code in charge of robot steering control
 - **SEED.png** - Main idea flowchart we created for this demo, can be seen below.
 
+## State Flowchart
+![image](https://github.com/WilliamWatts-dev/SEED/blob/50977cb95a24f537c43bea385da81d4bc6b4759a/Demo_2/SEED.png)
