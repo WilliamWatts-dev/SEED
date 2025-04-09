@@ -1,5 +1,3 @@
-
-
 /* ISSUES TO BE SOLVED BEFORE FINAL DEMO:
       1.) When in the QRFind state, one motor doesn't turn as much as the other. 
         Turn up PWM voltage to it or turn down PWM voltage from more powerful motor?
@@ -219,18 +217,10 @@ void loop() {
         if (readColor == 0) { // Red Arrow
           Serial.println("Arrow indicates: Rotate counterclockwise 90°.");
           // For counterclockwise rotation: motor1 backward, motor2 forward.
-          digitalWrite(motor1Dir, LOW);
-          digitalWrite(motor2Dir, HIGH);
-          analogWrite(motor1PWM, 45);
-          analogWrite(motor2PWM, 45);
+          setRotationCounterclockwise(45);
         } else if (readColor == 1) { // Green Arrow
           Serial.println("Arrow indicates: Rotate clockwise 90°.");
-          // Set wheel directions
-          digitalWrite(motor1Dir, HIGH);
-          digitalWrite(motor2Dir, LOW);
-          // Set power level of turn
-          analogWrite(motor1PWM, 45);
-          analogWrite(motor2PWM, 45);
+          setRotationClockwise(45);
         } else { // No Arrow
           // Robot is finished, make it do a cool dance or something.
           Serial.println("No Arrow Detected, Assuming Course is Finished.");
@@ -238,7 +228,7 @@ void loop() {
           break;
         }
         // After rotation, you may restart the state machine.
-        delay(rotationDelay); // How long it takes to turn 90 degrees approximately.
+        delay(rotationDelay); // How long it takes to turn 90 degrees approximately. 
         stopMotors();
         currentState = AngleAdjust; // Move back to Angle Adjust state.
         // Reset sensor values if needed.
@@ -246,7 +236,7 @@ void loop() {
         readAngle = 0.0;
         readColor = 0;
         Serial.println("Rotation complete. Restarting QRCodeFind.");
-        delay(1500);// Delay for camera to catch up and read QR code
+        delay(1500);  // Delay for camera to catch up and read QR code
       }
       break;
 
