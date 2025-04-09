@@ -3,8 +3,9 @@
 /* ISSUES TO BE SOLVED BEFORE FINAL DEMO:
       1.) When in the QRFind state, one motor doesn't turn as much as the other. 
         Turn up PWM voltage to it or turn down PWM voltage from more powerful motor?
-      2.) When adjusting the angle, it just kind of does it in large increments. 
+      2.) When adjusting the angle, it does it in large increments. 
         Add some term that takes the angle of error and converts to a delay time, effectively angle?
+        (Smaller delays with smaller angles, larger delays with larger angles effectively)
       3.) Robot drifts while moving forward. 
         Could be corrected with an if statement in the MoveForward state that checks the angle. 
         If too high, reduce PWM on one of the motors until within acceptable boundary.
@@ -146,8 +147,8 @@ void loop() {
   
   switch (currentState) {
     case QRCodeFind:
-      // Rotate slowly clockwise looking for the QR code.
-      setRotationClockwise(slowPWM);
+      // Rotate slowly counterclockwise looking for the QR code. (As specified by the Final Demo Instructions)
+      setRotationCounterclockwise(slowPWM);
       // Once new data arrives, i.e. QR code is found, stop motors and switch state.
       if (newData == false && (readFeet != 0.0 || readAngle != 0.0)) { // No new data, but we have feet/angle measurements.
         // Data was updated via I2C
