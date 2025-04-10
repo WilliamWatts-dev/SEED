@@ -10,6 +10,8 @@
 # Might need to draw out the processing pipeline of the threads
 # ChatGPT mentioned using a distrubutor and dispatcher thread to manage sending data by making copies
 # You can use queue.get(timeout=0.05)
+# Use time.sleep(0.05) to control output
+# Too many threads could use up too many resources
 
 import cv2
 from cv2 import aruco
@@ -25,9 +27,25 @@ from pathlib import Path
 
 # GLOBAL VARS
 ARD_ADDR = 0x08
+global_state = {
+    "angle": 0.0,
+    "distance": 0.0,
+    "state": 0,
+    "color_code": 0
+}
+
+# Queues to share data between threads
+frame_queue = queue.Queue(maxsize=1) # Most recent frame from camera feed
+marker_queue = queue.Queue(maxsize=1) # Copy of frame for marker thread to access
+color_queue = queue.Queue(maxsize=1) # copy of frame for color thread to access
+marker_results_queue = queue.Queue(maxsize=1) # Dictionary containing marker results
+color_results_queue = queue.Queue(maxsize=1) # Dictionary containing color results
 
 # Global Event
 stop_event = threading.Event()
+
+# Lock for threading
+lock = threading.Lock()
 
 # Set up logging
 logging.basicConfig(
@@ -97,25 +115,25 @@ def capture_thread():
 
     try:
         while not stop_event.is_set()
-            while True:
-                # Break loop with 'q' key
-                k = cv2.waitKey(1) & 0xFF
-                if k == ord('q'):
-                    break
+    
+            # Break loop with 'q' key
+            k = cv2.waitKey(1) & 0xFF
+            if k == ord('q'):
+                break
 
-                # Capture frame
-                ret, frame = cap.read()
-                if not ret:
-                    logging.error("Failed to grab frame")
-                    break
+            # Capture frame
+            ret, frame = cap.read()
+            if not ret:
+                logging.error("Failed to grab frame")
+                break
 
-                # Update capture_queue
-                if capture_queue.full():
-                    try:
-                        capture_queue.get_nowait()  # Drop the old frame.
-                    except queue.Empty:
-                        pass
-                capture_queue.put(frame)
+            # Update capture_queue
+            if capture_queue.full():
+                try:
+                    capture_queue.get_nowait()  # Drop the old frame
+                except queue.Empty:
+                    pass
+                capture_queue.put(frame) # Update with most recent frame
     finally:
         cap.release()
 
@@ -124,7 +142,11 @@ def distributor_thread():
     """
     Read from the capture queue and feed the same frame into two queues.
     """
-
+    try:
+        while not stop_event.is_set():
+            
+    finally:
+                
 def marker_detection_thread():
     """
     Detect marker and compute angle and distance
@@ -132,32 +154,75 @@ def marker_detection_thread():
     """
 
 
+    try:
+        while not stop_event.is_set():
+            
+    finally:
+
 def color_detection_thread():
     """
     Run color detection on the frame and determine which direction to turn.
     """
 
 
+    try:
+        while not stop_event.is_set():
+            
+    finally:
+
 def dispatcher_thread():
     """
     Gather the latest results from marker and color detection.
-    Then update the global shared state safely using with lock:.
+    Then update the global shared state using with lock:.
     """
 
+
+    try:
+        while not stop_event.is_set():
+
+    finally:
+
+def communication_thread():
+    """
+    Get latest data from global and deliver over I2C.
+    """
+
+
+    try:
+        while not stop_event.is_set():
+            
+    finally:
+        
 def main():
 
     # Create threads
-    t_capture = threading.Thread(target=capture_thread, name="CaptureThread", daemon=True)
-
+    threads = [     
+        threading.Thread(target=capture_thread, name="CaptureThread", daemon=True),
+        threading.Thread(target=distributor_thread, name="DistributorThread", daemon=True),
+        threading.Thread(target=marker_detection_thread, name="MarkerDetectionThread", daemon=True),
+        threading.Thread(target=color_detection_thread, name="ColorDetectionThread", daemon=True),
+        threading.Thread(target=dispatcher_thread, name="DispatcherThread", daemon=True),
+        threading.Thread(target=communication_thread, name="CommunicationThread", daemon=True),
+    ]
+    
     # Start threads
-    t_capture.start()
+    for t in threads:
+        t.start()
 
     try:
+        while not stop_event.is_set():
+            time.sleep(0.05)
 
     except keyboardInterrupt: # Ctrl+C
-    
-    
+        stop_event.set()
+        
+    finally:
 
+        
+        for t in threads:
+            t.join()
+        
+    
 if __name__ == "__main__":
     main()
 
