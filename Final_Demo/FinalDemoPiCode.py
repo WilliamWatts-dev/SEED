@@ -114,7 +114,7 @@ def capture_thread():
         raise IOError("Cannot open webcam")
 
     try:
-        while not stop_event.is_set()
+        while not stop_event.is_set():
     
             # Break loop with 'q' key
             k = cv2.waitKey(1) & 0xFF
@@ -142,27 +142,103 @@ def distributor_thread():
     """
     Read from the capture queue and feed the same frame into two queues.
     """
-    try:
-        while not stop_event.is_set():
+    while not stop_event.is_set():
+
+        # get latest frame from queue
+        frame = capture_queue.get()
+        
+        # Create copies to distribute
+        frame_copy_marker = frame.copy()
+        frame_copy_color = frame.copy()
+
+        # Add copy to marker detection queue
+        if marker_queue.full(): # maxsize 1
+            try:
+                marker_queue.get_nowait()
+            except queue.Empty:
+                pass
+        marker_queue.put(frame_copy_marker)
+
+        # Add copy to color detection queue
+        if color_queue.full():
+            try:
+                color_queue.get_nowait()
+            except queue.Empty
+                pass
+        color_queue.put(frame_copy_color)
+        
             
-    finally:
                 
 def marker_detection_thread():
     """
     Detect marker and compute angle and distance
     idea: update ROI for color_detection_thread to use
     """
+    
+    while not stop_event.is_set():
+        
+        # Get frame from distributor
+        frame = marker_queue.get()
 
+        # Undistort frame
+        dst = cv2.undistort(frame, camera_matrix, dist_coeffs)
 
-    try:
-        while not stop_event.is_set():
-            
-    finally:
+        # Convert to grayscale
+        gray = cv2.cvtColor(dst, cv2.COLOR_BGR2GRAY)
+
+        # Detect markers
+        corners, ids, rejected = aruco.detectMarkers(gray, aruco_dict, parameters=parameters)
+
+        # Check if marker is detected
+        if ids is not None and len(corners) > 0:
+
+        # Estimate pose for each marker
+        rvecs, tvecs, _ = aruco.estimatePoseSingleMarkers(
+            corners, 0.05, camera_matrix, dist_coeffs)
+
+        # Determine index of closest marker
+        closest_marker_idx = np.argmin(tvecs[:, 0, 2])
+        marker_id = ids[closest_marker_idx][0]
+
+        # Store closest marker into rvec & tvec
+        rvec = rvecs[closest_marker_idx]
+        tvec = tvecs[closest_marker_idx][0]  # [x,y,z]
+
+        # Calculate distance in feet (assuming marker size is in meters)
+        # Z-component of tvec is the distance in marker size units
+        distance_meters = tvec[2]
+        distance_feet = distance_meters * 3.28084  # Convert meters to feet
+
+        # Calculate angle (horizontal offset from center)
+        # X-component is the horizontal offset
+        # Negative angle means target is to the left, positive to the right
+        angle_radians = math.atan2(tvec[0], tvec[2])
+        angle_degrees = math.degrees(angle_radians)
+
+        # Update angle and distance
+        marker_result = {
+            "angle": angle_degrees,
+            "distance": distance_feet
+        }
+
+        # Place result into marker results queue
+        if marker_results_queue.full():
+            try:
+                marker_results_queue.get_nowait()
+            except queue.Empty:
+                pass
+        marker_results_queue.put(marker_result)
+
+        
+
 
 def color_detection_thread():
     """
     Run color detection on the frame and determine which direction to turn.
     """
+    # Get frame from distributor
+    frame = color_queue.get()
+
 
 
     try:
@@ -174,6 +250,7 @@ def dispatcher_thread():
     """
     Gather the latest results from marker and color detection.
     Then update the global shared state using with lock:.
+    Maybe also send over i2c from here.
     """
 
 
@@ -217,8 +294,6 @@ def main():
         stop_event.set()
         
     finally:
-
-        
         for t in threads:
             t.join()
         
