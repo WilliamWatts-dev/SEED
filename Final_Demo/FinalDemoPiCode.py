@@ -12,6 +12,10 @@
 # You can use queue.get(timeout=0.05)
 # Use time.sleep(0.05) to control output
 # Too many threads could use up too many resources
+# TODO:
+# - HSV values tuning
+# - Add LCD support
+# - 
 
 import cv2
 from cv2 import aruco
