@@ -39,18 +39,18 @@ const int motor2Dir = 8;   // Direction pin for motor 2
 const int motorEnable = 4; // Motor driver enable pin
 
 // --- PWM Settings for different states ---
-const int slowPWM    = 35;  // PWM for QRCodeFind rotation (coarse search)
+const int slowPWM    = 32;  // PWM for QRCodeFind rotation (coarse search)
 const int adjustPWM  = 35;  // PWM for coarse angle adjustment
 const int finePWM    = 35;   // PWM for fine angle adjustment
-const int forwardPWM = 45;  // PWM for moving forward
-const int rotationDelay = 3000;
+const int forwardPWM = 55;  // PWM for moving forward
+const int rotationDelay = 2900;
 
 // --- Motor Control Helper Functions ---
 void setRotationClockwise(int pwm) {
   // For clockwise rotation: motor1 forward, motor2 backward.
   digitalWrite(motor1Dir, HIGH);
   digitalWrite(motor2Dir, LOW);
-  analogWrite(motor1PWM, pwm);
+  analogWrite(motor1PWM, pwm*1.28);
   analogWrite(motor2PWM, pwm);
 }
 
@@ -58,7 +58,7 @@ void setRotationCounterclockwise(int pwm) {
   // For counterclockwise rotation: motor1 backward, motor2 forward.
   digitalWrite(motor1Dir, LOW);
   digitalWrite(motor2Dir, HIGH);
-  analogWrite(motor1PWM, pwm);
+  analogWrite(motor1PWM, pwm*1.28);
   analogWrite(motor2PWM, pwm);
 }
 
@@ -66,7 +66,7 @@ void setForward(int pwm) {
   // For forward motion: both motors forward.
   digitalWrite(motor1Dir, LOW);
   digitalWrite(motor2Dir, LOW);
-  analogWrite(motor1PWM, pwm);
+  analogWrite(motor1PWM, pwm*1.28);
   analogWrite(motor2PWM, pwm);
 }
 
@@ -221,11 +221,14 @@ void loop() {
         } else if (readColor == 1) { // Green Arrow
           Serial.println("Arrow indicates: Rotate clockwise 90°.");
           setRotationClockwise(45);
-        } else { // No Arrow
+        } else if (readColor == 2){ // No Arrow
           // Robot is finished, make it do a cool dance or something.
           Serial.println("No Arrow Detected, Assuming Course is Finished.");
           currentState = RobotFinished;
           break;
+        }
+        else {
+          Serial.println("No State Found");
         }
         // After rotation, you may restart the state machine.
         delay(rotationDelay); // How long it takes to turn 90 degrees approximately. 
@@ -240,11 +243,12 @@ void loop() {
       }
       break;
 
-  }
+  
   case RobotFinished: 
     // Have the robot do a cool dance or something. Maybe turn on an LED to indicate we're finished.
     {
       // Cool dance code.
     }
   delay(5); // Small loop delay for stability
+  }
 }
