@@ -40,7 +40,7 @@ const int motorEnable = 4; // Motor driver enable pin
 
 // --- PWM Settings for different states ---
 const int slowPWM    = 32;  // PWM for QRCodeFind rotation (coarse search)
-const int adjustPWM  = 35;  // PWM for coarse angle adjustment
+const int adjustPWM  = 42;  // PWM for coarse angle adjustment
 const int finePWM    = 35;   // PWM for fine angle adjustment
 const int forwardPWM = 55;  // PWM for moving forward
 const int rotationDelay = 2900;
@@ -165,9 +165,15 @@ void loop() {
       } else {
         setRotationClockwise(adjustPWM);
       }
-      delay(200); // Time the motors are on
+      if (abs(readAngle) >= 15) {
+        delay(700);
+      } else if (abs(readAngle >= 10)) {
+        delay(500);
+      } else {
+        delay(200); // Time the motors are on
+      }
       stopMotors();
-      delay(1500); // Delay for camera to catch up
+      delay(750); // Delay for camera to catch up //1500
 
       // When within fine degree threshold, stop and move to fine adjustment.
       // Otherwise, just keep adjusting.
@@ -188,7 +194,7 @@ void loop() {
       }
       delay(150); // Time the motors are on
       stopMotors();
-      delay(1500); // Delay for camera to catch up
+      delay(750); // Delay for camera to catch up
       // When within 1° of alignment, stop and move forward.
       if (abs(readAngle) <= 1) {
         stopMotors();
