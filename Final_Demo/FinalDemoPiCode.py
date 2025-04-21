@@ -24,6 +24,7 @@ import struct
 import threading
 import math
 from pathlib import Path
+import queue
 
 # GLOBAL VARS
 ARD_ADDR = 0x08
@@ -35,7 +36,7 @@ global_state = {
 }
 
 # Queues to share data between threads
-frame_queue = queue.Queue(maxsize=1) # Most recent frame from camera feed
+capture_queue = queue.Queue(maxsize=1) # Most recent frame from camera feed
 marker_queue = queue.Queue(maxsize=1) # Copy of frame for marker thread to access
 color_queue = queue.Queue(maxsize=1) # copy of frame for color thread to access
 roi_queue = queue.Queue(maxsize=1) # When marker is detected update location data for color detection
@@ -183,7 +184,9 @@ def capture_thread():
                     capture_queue.get_nowait()  # Drop the old frame
                 except queue.Empty:
                     pass
-                capture_queue.put(frame) # Update with most recent frame
+            capture_queue.put(frame) # Update with most recent frame
+
+            cv2.imshow('capture', frame)
     finally:
         cap.release()
 
@@ -311,6 +314,8 @@ def marker_detection_thread():
                     pass
             marker_results_queue.put(marker_result)
 
+            cv2.imshow('Window', dst)
+
         
 
 
@@ -382,7 +387,7 @@ def dispatcher_thread():
             angle = marker_result["angle"]
             color_code = color_result["color_code"]
             
-            send_to_arduino_(distance, angle, color_code)
+            send_to_arduino(distance, angle, color_code)
             
          
 
@@ -402,6 +407,8 @@ def main():
     for t in threads:
         t.start()
 
+    logging.info("Threads started")
+    
     try:
         while not stop_event.is_set():
             sleep(0.05)
