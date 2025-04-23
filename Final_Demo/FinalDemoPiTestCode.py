@@ -46,6 +46,7 @@ color_queue = queue.Queue(maxsize=1) # copy of frame for color thread to access
 roi_queue = queue.Queue(maxsize=1) # When marker is detected update location data for color detection
 marker_results_queue = queue.Queue(maxsize=1) # Dictionary containing marker results
 color_results_queue = queue.Queue(maxsize=1) # Dictionary containing color results
+display_queue = queue.Queue(maxsize=1)
 
 # Global Event
 stop_event = threading.Event()
@@ -111,11 +112,11 @@ def detect_color(frame):
     green_mask = cv2.inRange(hsv, lower_green, upper_green)
 
     # Apply morphological operations to reduce noise
-    kernel = np.ones((5, 5), np.uint8)
-    red_mask = cv2.morphologyEx(red_mask, cv2.MORPH_OPEN, kernel)
-    red_mask = cv2.morphologyEx(red_mask, cv2.MORPH_CLOSE, kernel)
-    green_mask = cv2.morphologyEx(green_mask, cv2.MORPH_OPEN, kernel)
-    green_mask = cv2.morphologyEx(green_mask, cv2.MORPH_CLOSE, kernel)
+    #kernel = np.ones((5, 5), np.uint8)
+    #red_mask = cv2.morphologyEx(red_mask, cv2.MORPH_OPEN, kernel)
+    #red_mask = cv2.morphologyEx(red_mask, cv2.MORPH_CLOSE, kernel)
+    #green_mask = cv2.morphologyEx(green_mask, cv2.MORPH_OPEN, kernel)
+    #green_mask = cv2.morphologyEx(green_mask, cv2.MORPH_CLOSE, kernel)
 
     # Calculate area of each color
     red_area = cv2.countNonZero(red_mask)
@@ -190,6 +191,8 @@ def capture_thread():
                     pass
             capture_queue.put(frame) # Update with most recent frame
 
+            sleep(0.05)
+
     finally:
         cap.release()
 
@@ -250,6 +253,9 @@ def marker_detection_thread():
 
         # Check if marker is detected
         if ids is not None and len(corners) > 0:
+
+            # Draw detected markers
+            aruco.drawDetectedMarkers(dst, corners, ids)
 
             # Estimate pose for each marker
             rvecs, tvecs, _ = aruco.estimatePoseSingleMarkers(
@@ -318,8 +324,15 @@ def marker_detection_thread():
                 except queue.Empty:
                     pass
             marker_results_queue.put(marker_result)
-
-        
+        #end if
+        #cv2.imshow("Frame", dst)
+        if display_queue.full():
+            try:
+                display_queue.get_nowait()
+            except queue.Empty:
+                pass
+        display_queue.put(dst)
+        logging.info("Sent Display frame")
 
 
 def color_detection_thread():
@@ -338,6 +351,7 @@ def color_detection_thread():
 
         # Get data from ROI_queue
         data = roi_queue.get()
+        logging.info("Recieved ROI data")
         roi = data["roi"]
         frame = data["frame"]
 
@@ -350,14 +364,19 @@ def color_detection_thread():
 
         # Combine red_vis and green_vis
         masked_frame = cv2.bitwise_or(red_vis, green_vis)
-        cv2.imshow('Mask', masked_frame)
+
+        
+        displayresult = {
+            "color_mask": masked_frame,
+            "frame": frame
+        }
+
 
         # Store results in a dictionary
         color_result = {
             "color_code": color_code,
             "red_area": red_area,
             "green_area": green_area,
-            "color_mask": masked_frame
         }
         if color_code is 0:
             logging.info("Detected color - Green (turn left)")
@@ -383,19 +402,31 @@ def dispatcher_thread():
     while not stop_event.is_set():
         # Get latest marker results
         try:
-            marker_result = marker_results_queue.get(timeout=1)
+            marker_result = marker_results_queue.get(timeout=0.1)
         except queue.Empty:
             marker_result = None
         # Get latest color results
         try:
-            color_result = color_results_queue.get(timeout=1)
+            color_result = color_results_queue.get(timeout=0.1)
+            logging.info(f"recieved color_result - {color_result}")
         except queue.Empty:
             color_result = None
+
+        try:
+            display_result = display_queue.get(timeout=0.1)
+        except queue.Empty:
+            display_result = None
+
+        logging.info("displaying frame")
+        if display_result is not None:
+            #cv2.imshow("Frame", display_result)
+            #cv2.waitKey(1)
+            logging.info("Frame displayed!")
 
         if marker_result is not None and color_result is not None:
 
             # Get data to send to arduino
-            distanece = marker_result["distance"]
+            distance = marker_result["distance"]
             angle = marker_result["angle"]
             color_code = color_result["color_code"]
             
