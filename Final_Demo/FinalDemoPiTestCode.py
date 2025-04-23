@@ -172,11 +172,6 @@ def capture_thread():
     try:
         while not stop_event.is_set():
     
-            # Break loop with 'q' key
-            k = cv2.waitKey(1) & 0xFF
-            if k == ord('q'):
-                break
-
             # Capture frame
             ret, frame = cap.read()
             if not ret:
@@ -191,45 +186,15 @@ def capture_thread():
                     pass
             capture_queue.put(frame) # Update with most recent frame
 
+            logging.info("Updated frame")
             sleep(0.05)
-
+            
+    except Exception as e:
+        logging.error(f"Error: {e}")
     finally:
         cap.release()
 
 
-def distributor_thread():
-    """
-    Read from the capture queue and feed the same frame into two queues.
-    idea: this thread is redundant
-    """
-    while not stop_event.is_set():
-
-        # get latest frame from queue
-        ##frame = capture_queue.get()
-        
-        # Create copies to distribute
-        ##frame_copy_marker = frame.copy()
-        ##frame_copy_color = frame.copy()
-
-        # Add copy to marker detection queue
-        ## ALSO UNUSED
-        if marker_queue.full(): # maxsize 1
-            try:
-                marker_queue.get_nowait()
-            except queue.Empty:
-                pass
-        ##marker_queue.put(frame_copy_marker)
-
-        # Add copy to color detection queue
-        # CURRENTLY UNUSED
-        if color_queue.full():
-            try:
-                color_queue.get_nowait()
-            except queue.Empty:
-                pass
-        ##color_queue.put(frame_copy_color)
-        
-            
                 
 def marker_detection_thread():
     """
@@ -412,17 +377,6 @@ def dispatcher_thread():
         except queue.Empty:
             color_result = None
 
-        try:
-            display_result = display_queue.get(timeout=0.1)
-        except queue.Empty:
-            display_result = None
-
-        logging.info("displaying frame")
-        if display_result is not None:
-            #cv2.imshow("Frame", display_result)
-            #cv2.waitKey(1)
-            logging.info("Frame displayed!")
-
         if marker_result is not None and color_result is not None:
 
             # Get data to send to arduino
@@ -430,20 +384,41 @@ def dispatcher_thread():
             angle = marker_result["angle"]
             color_code = color_result["color_code"]
             
-            send_to_arduino(distance, angle, color_code)
-            
-         
+            send_data_to_arduino(distance, angle, color_code)
 
+        sleep(0.01) 
+         
+def display_thread():
+    """
+    Pulls the latest frame from display_queue and shows it continuously.
+    """
+    cv2.namedWindow("Frame", cv2.WINDOW_NORMAL)
+    while not stop_event.is_set():
+        logging.info("Attempting to access frame")
+        try:
+            frame = display_queue.get(timeout=0.1)
+        except queue.Empty:
+            continue
+        logging.info("frame recieved")
+        
+        cv2.imshow("Frame", frame)
+        # This both updates the window and lets us exit on 'q'
+        if cv2.waitKey(1) & 0xFF == ord('q'):
+            stop_event.set()
+            break
+
+    cv2.destroyAllWindows()
+    
         
 def main():
 
     # Create threads
     threads = [     
         threading.Thread(target=capture_thread, name="CaptureThread", daemon=True),
-        threading.Thread(target=distributor_thread, name="DistributorThread", daemon=True),
         threading.Thread(target=marker_detection_thread, name="MarkerDetectionThread", daemon=True),
         threading.Thread(target=color_detection_thread, name="ColorDetectionThread", daemon=True),
         threading.Thread(target=dispatcher_thread, name="DispatcherThread", daemon=True),
+        threading.Thread(target=display_thread, name="DisplayThread", daemon=True),
     ]
     
     # Start threads
