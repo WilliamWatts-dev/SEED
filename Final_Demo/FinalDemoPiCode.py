@@ -123,7 +123,7 @@ def detect_color(frame):
 
     # Determine dominant color (-1 for below thresh, 1 for red, 0 for green)
     if red_area < 500 and green_area < 500:
-        color_code = -1 # Not enough of either color
+        color_code = 2 # Not enough of either color
     else:
         color_code = 1 if red_area > green_area else 0
          

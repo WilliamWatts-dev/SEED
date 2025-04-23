@@ -123,7 +123,7 @@ def detect_color(frame):
 
     # Determine dominant color (-1 for below thresh, 1 for red, 0 for green)
     if red_area < 500 and green_area < 500:
-        color_code = -1 # Not enough of either color
+        color_code = 2 # Not enough of either color
     else:
         color_code = 1 if red_area > green_area else 0
          
@@ -144,7 +144,7 @@ def send_data_to_arduino(distance_feet, angle_degrees, color_code):
     angle_bytes = struct.pack('f', float(angle_degrees))
 
     # Pack color as a single byte
-    color_byte = bytes([color_code & 0x01])
+    color_byte = bytes(color_code)
 
     # Combine data
     combined_data = list(distance_bytes + angle_bytes + color_byte)
@@ -190,7 +190,6 @@ def capture_thread():
                     pass
             capture_queue.put(frame) # Update with most recent frame
 
-            cv2.imshow('capture', frame)
     finally:
         cap.release()
 
@@ -357,8 +356,13 @@ def color_detection_thread():
         color_result = {
             "color_code": color_code,
             "red_area": red_area,
-            "green_area": green_area
+            "green_area": green_area,
+            "color_mask": masked_frame
         }
+        if color_code is 0:
+            logging.info("Detected color - Green (turn left)")
+        elif color_code is 1:
+            logging.info("Detected color - Red  (turn right)")
 
         # Update color results
         if color_results_queue.full():
@@ -379,12 +383,12 @@ def dispatcher_thread():
     while not stop_event.is_set():
         # Get latest marker results
         try:
-            marker_result = marker_results_queue.get(timeout=0.05)
+            marker_result = marker_results_queue.get(timeout=1)
         except queue.Empty:
             marker_result = None
         # Get latest color results
         try:
-            color_result = color_results_queue.get(timeout=0.05)
+            color_result = color_results_queue.get(timeout=1)
         except queue.Empty:
             color_result = None
 
@@ -419,6 +423,10 @@ def main():
     
     try:
         while not stop_event.is_set():
+            k = cv2.waitKey(1) & 0xFF
+            if k == ord('q'):
+                stop_event.set()
+                break
             sleep(0.05)
 
     except keyboardInterrupt: # Ctrl+C
