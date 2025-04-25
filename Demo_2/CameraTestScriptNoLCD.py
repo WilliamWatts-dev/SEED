@@ -113,7 +113,12 @@ def detect_color(frame):
     green_area = cv2.countNonZero(green_mask)
 
     # Determine dominant color (1 for red, 0 for green)
-    color_code = 1 if red_area > green_area and red_area > 500 else 0
+    if red_area > green_area and red_area > 500:
+        color_code = 1 # Red / Right
+    elif green_area > 500:
+        color_code = 0 # Green / Left
+    else:
+        color_code = 2 # No arrow, end of course
 
     # For visualization
     red_result = cv2.bitwise_and(frame, frame, mask=red_mask)
