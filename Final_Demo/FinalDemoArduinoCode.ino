@@ -1,20 +1,6 @@
 /* ISSUES TO BE SOLVED BEFORE FINAL DEMO:
-      1.) When in the QRFind state, one motor doesn't turn as much as the other. 
-        Turn up PWM voltage to it or turn down PWM voltage from more powerful motor?
-      2.) When adjusting the angle, it does it in large increments. 
-        Add some term that takes the angle of error and converts to a delay time, effectively angle?
-        (Smaller delays with smaller angles, larger delays with larger angles effectively)
-      3.) Robot drifts while moving forward. 
-        Could be corrected with an if statement in the MoveForward state that checks the angle. 
-        If too high, reduce PWM on one of the motors until within acceptable boundary.
       4.) Delays are very long and frequent, and the robot is slow. 
         Could be fixed by increasing PWM values to just keep friction, decrease delays to exactly camera delay, decrease Pi delay?
-      5.) Final Demo will include a QR Code with no arrow. 
-        Code only takes into account when there is a red arrow or when there isn't. 
-        Will need 2 bits for Red arrow, Green arrow, and No arrow.
-        (Use last bit for error state?)
-      6.) The robot does not indicate when it is finished.
-        Code should be written for the RobotFinished state.
 */
 
 #include <Wire.h>
@@ -70,6 +56,14 @@ void setForward(int pwm) {
   analogWrite(motor2PWM, pwm);
 }
 
+void setBackward(int pwm) {
+  // For forward motion: both motors forward.
+  digitalWrite(motor1Dir, HIGH);
+  digitalWrite(motor2Dir, HIGH);
+  analogWrite(motor1PWM, pwm*1.28);
+  analogWrite(motor2PWM, pwm);
+}
+
 void stopMotors() {
   analogWrite(motor1PWM, 0);
   analogWrite(motor2PWM, 0);
@@ -103,7 +97,7 @@ void receiveEvent(int howMany) {
 void updateSensorData() {
   memcpy(&readFeet, dataBuffer, 4);
   memcpy(&readAngle, dataBuffer + 4, 4);
-  readColor = dataBuffer[8] & 0x01;
+  readColor = dataBuffer[8] & 0x03;
   newData = false;
 }
 
@@ -220,18 +214,57 @@ void loop() {
       // Rotate 90 degrees based on arrow data.
       // If redArrow (readColor) equals 0, rotate 90° counterclockwise; otherwise, clockwise.
       {
-        if (readColor == 0) { // Red Arrow
-          Serial.println("Arrow indicates: Rotate counterclockwise 90°.");
+        if (readColor == 0) { // Green Arrow
+          Serial.println("Arrow indicates: Rotate Counterclockwise 90°.");
           // For counterclockwise rotation: motor1 backward, motor2 forward.
           setRotationCounterclockwise(45);
-        } else if (readColor == 1) { // Green Arrow
-          Serial.println("Arrow indicates: Rotate clockwise 90°.");
+        } else if (readColor == 1) { // Red Arrow
+          Serial.println("Arrow indicates: Rotate Clockwise 90°.");
           setRotationClockwise(45);
         } else if (readColor == 2){ // No Arrow
           // Robot is finished, make it do a cool dance or something.
           Serial.println("No Arrow Detected, Assuming Course is Finished.");
+          setBackward(forwardPWM);
+          delay(300);
+          stopMotors();
+          delay(100);
+
+          setForward(forwardPWM);
+          delay(300);
+          stopMotors();
+          delay(100);
+
+          setRotationCounterclockwise(slowPWM);
+          delay(300);
+          stopMotors();
+          delay(100);
+
+          setRotationClockwise(slowPWM);
+          delay(300);
+          stopMotors();
+          delay(100);
+
+          setBackward(forwardPWM);
+          delay(300);
+          stopMotors();
+          delay(100);
+
+          setForward(forwardPWM);
+          delay(300);
+          stopMotors();
+          delay(100);
+
+          setRotationClockwise(slowPWM);
+          delay(300);
+          stopMotors();
+          delay(100);
+
+          setRotationCounterclockwise(slowPWM);
+          delay(300);
+          stopMotors();
+          delay(100);
+          stopMotors();
           currentState = RobotFinished;
-          break;
         }
         else {
           Serial.println("No State Found");
@@ -251,9 +284,47 @@ void loop() {
 
   
   case RobotFinished: 
-    // Have the robot do a cool dance or something. Maybe turn on an LED to indicate we're finished.
+    // Have the robot do a cool dance
     {
-      // Cool dance code.
+      setBackward(forwardPWM);
+      delay(300);
+      stopMotors();
+      delay(100);
+
+      setForward(forwardPWM);
+      delay(300);
+      stopMotors();
+      delay(100);
+
+      setRotationCounterclockwise(slowPWM);
+      delay(300);
+      stopMotors();
+      delay(100);
+
+      setRotationClockwise(slowPWM);
+      delay(300);
+      stopMotors();
+      delay(100);
+
+      setBackward(forwardPWM);
+      delay(300);
+      stopMotors();
+      delay(100);
+
+      setForward(forwardPWM);
+      delay(300);
+      stopMotors();
+      delay(100);
+
+      setRotationClockwise(slowPWM);
+      delay(300);
+      stopMotors();
+      delay(100);
+
+      setRotationCounterclockwise(slowPWM);
+      delay(300);
+      stopMotors();
+      delay(1500);
     }
   delay(5); // Small loop delay for stability
   }
