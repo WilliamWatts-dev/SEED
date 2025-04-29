@@ -388,27 +388,8 @@ def dispatcher_thread():
 
         sleep(0.01) 
          
-def display_thread():
-    """
-    Pulls the latest frame from display_queue and shows it continuously.
-    """
-    cv2.namedWindow("Frame", cv2.WINDOW_NORMAL)
-    while not stop_event.is_set():
-        logging.info("Attempting to access frame")
-        try:
-            frame = display_queue.get(timeout=0.1)
-        except queue.Empty:
-            continue
-        logging.info("frame recieved")
-        
-        cv2.imshow("Frame", frame)
-        # This both updates the window and lets us exit on 'q'
-        if cv2.waitKey(1) & 0xFF == ord('q'):
-            stop_event.set()
-            break
 
-    cv2.destroyAllWindows()
-    
+
         
 def main():
 
@@ -418,7 +399,6 @@ def main():
         threading.Thread(target=marker_detection_thread, name="MarkerDetectionThread", daemon=True),
         threading.Thread(target=color_detection_thread, name="ColorDetectionThread", daemon=True),
         threading.Thread(target=dispatcher_thread, name="DispatcherThread", daemon=True),
-        threading.Thread(target=display_thread, name="DisplayThread", daemon=True),
     ]
     
     # Start threads
