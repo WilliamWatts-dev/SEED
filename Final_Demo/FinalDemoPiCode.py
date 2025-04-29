@@ -46,6 +46,7 @@ color_queue = queue.Queue(maxsize=1) # copy of frame for color thread to access
 roi_queue = queue.Queue(maxsize=1) # When marker is detected update location data for color detection
 marker_results_queue = queue.Queue(maxsize=1) # Dictionary containing marker results
 color_results_queue = queue.Queue(maxsize=1) # Dictionary containing color results
+display_queue = queue.Queue(maxsize=1)
 
 # Global Event
 stop_event = threading.Event()
@@ -111,11 +112,11 @@ def detect_color(frame):
     green_mask = cv2.inRange(hsv, lower_green, upper_green)
 
     # Apply morphological operations to reduce noise
-    kernel = np.ones((5, 5), np.uint8)
-    red_mask = cv2.morphologyEx(red_mask, cv2.MORPH_OPEN, kernel)
-    red_mask = cv2.morphologyEx(red_mask, cv2.MORPH_CLOSE, kernel)
-    green_mask = cv2.morphologyEx(green_mask, cv2.MORPH_OPEN, kernel)
-    green_mask = cv2.morphologyEx(green_mask, cv2.MORPH_CLOSE, kernel)
+    #kernel = np.ones((5, 5), np.uint8)
+    #red_mask = cv2.morphologyEx(red_mask, cv2.MORPH_OPEN, kernel)
+    #red_mask = cv2.morphologyEx(red_mask, cv2.MORPH_CLOSE, kernel)
+    #green_mask = cv2.morphologyEx(green_mask, cv2.MORPH_OPEN, kernel)
+    #green_mask = cv2.morphologyEx(green_mask, cv2.MORPH_CLOSE, kernel)
 
     # Calculate area of each color
     red_area = cv2.countNonZero(red_mask)
@@ -144,7 +145,7 @@ def send_data_to_arduino(distance_feet, angle_degrees, color_code):
     angle_bytes = struct.pack('f', float(angle_degrees))
 
     # Pack color as a single byte
-    color_byte = bytes([color_code & 0x01])
+    color_byte = bytes(color_code)
 
     # Combine data
     combined_data = list(distance_bytes + angle_bytes + color_byte)
@@ -171,11 +172,6 @@ def capture_thread():
     try:
         while not stop_event.is_set():
     
-            # Break loop with 'q' key
-            k = cv2.waitKey(1) & 0xFF
-            if k == ord('q'):
-                break
-
             # Capture frame
             ret, frame = cap.read()
             if not ret:
@@ -190,43 +186,15 @@ def capture_thread():
                     pass
             capture_queue.put(frame) # Update with most recent frame
 
-            cv2.imshow('capture', frame)
+            logging.info("Updated frame")
+            sleep(0.05)
+            
+    except Exception as e:
+        logging.error(f"Error: {e}")
     finally:
         cap.release()
 
 
-def distributor_thread():
-    """
-    Read from the capture queue and feed the same frame into two queues.
-    idea: this thread is redundant
-    """
-    while not stop_event.is_set():
-
-        # get latest frame from queue
-        frame = capture_queue.get()
-        
-        # Create copies to distribute
-        frame_copy_marker = frame.copy()
-        frame_copy_color = frame.copy()
-
-        # Add copy to marker detection queue
-        if marker_queue.full(): # maxsize 1
-            try:
-                marker_queue.get_nowait()
-            except queue.Empty:
-                pass
-        marker_queue.put(frame_copy_marker)
-
-        # Add copy to color detection queue
-        # CURRENTLY UNUSED
-        if color_queue.full():
-            try:
-                color_queue.get_nowait()
-            except queue.Empty:
-                pass
-        color_queue.put(frame_copy_color)
-        
-            
                 
 def marker_detection_thread():
     """
@@ -237,7 +205,7 @@ def marker_detection_thread():
     while not stop_event.is_set():
         
         # Get frame from distributor
-        frame = marker_queue.get()
+        frame = capture_queue.get()
 
         # Undistort frame
         dst = cv2.undistort(frame, camera_matrix, dist_coeffs)
@@ -250,6 +218,9 @@ def marker_detection_thread():
 
         # Check if marker is detected
         if ids is not None and len(corners) > 0:
+
+            # Draw detected markers
+            aruco.drawDetectedMarkers(dst, corners, ids)
 
             # Estimate pose for each marker
             rvecs, tvecs, _ = aruco.estimatePoseSingleMarkers(
@@ -309,6 +280,7 @@ def marker_detection_thread():
                 "angle": angle_degrees,
                 "distance": distance_feet
             }
+            logging.info(f"Detected marker - {marker_result}")
 
             # Place result into marker results queue
             if marker_results_queue.full():
@@ -317,10 +289,15 @@ def marker_detection_thread():
                 except queue.Empty:
                     pass
             marker_results_queue.put(marker_result)
-
-            cv2.imshow('Window', dst)
-
-        
+        #end if
+        #cv2.imshow("Frame", dst)
+        if display_queue.full():
+            try:
+                display_queue.get_nowait()
+            except queue.Empty:
+                pass
+        display_queue.put(dst)
+        logging.info("Sent Display frame")
 
 
 def color_detection_thread():
@@ -339,6 +316,7 @@ def color_detection_thread():
 
         # Get data from ROI_queue
         data = roi_queue.get()
+        logging.info("Recieved ROI data")
         roi = data["roi"]
         frame = data["frame"]
 
@@ -349,12 +327,26 @@ def color_detection_thread():
         # Detect color
         color_code, red_vis, green_vis, red_area, green_area = detect_color(roi_frame)
 
+        # Combine red_vis and green_vis
+        masked_frame = cv2.bitwise_or(red_vis, green_vis)
+
+        
+        displayresult = {
+            "color_mask": masked_frame,
+            "frame": frame
+        }
+
+
         # Store results in a dictionary
         color_result = {
             "color_code": color_code,
             "red_area": red_area,
-            "green_area": green_area
+            "green_area": green_area,
         }
+        if color_code is 0:
+            logging.info("Detected color - Green (turn left)")
+        elif color_code is 1:
+            logging.info("Detected color - Red  (turn right)")
 
         # Update color results
         if color_results_queue.full():
@@ -375,36 +367,58 @@ def dispatcher_thread():
     while not stop_event.is_set():
         # Get latest marker results
         try:
-            marker_result = marker_results_queue.get(timeout=0.05)
+            marker_result = marker_results_queue.get(timeout=0.1)
         except queue.Empty:
             marker_result = None
         # Get latest color results
         try:
-            color_result = color_results_queue.get(timeout=0.05)
+            color_result = color_results_queue.get(timeout=0.1)
+            logging.info(f"recieved color_result - {color_result}")
         except queue.Empty:
             color_result = None
 
         if marker_result is not None and color_result is not None:
 
             # Get data to send to arduino
-            distanece = marker_result["distance"]
+            distance = marker_result["distance"]
             angle = marker_result["angle"]
             color_code = color_result["color_code"]
             
-            send_to_arduino(distance, angle, color_code)
-            
-         
+            send_data_to_arduino(distance, angle, color_code)
 
+        sleep(0.01) 
+         
+def display_thread():
+    """
+    Pulls the latest frame from display_queue and shows it continuously.
+    """
+    cv2.namedWindow("Frame", cv2.WINDOW_NORMAL)
+    while not stop_event.is_set():
+        logging.info("Attempting to access frame")
+        try:
+            frame = display_queue.get(timeout=0.1)
+        except queue.Empty:
+            continue
+        logging.info("frame recieved")
+        
+        cv2.imshow("Frame", frame)
+        # This both updates the window and lets us exit on 'q'
+        if cv2.waitKey(1) & 0xFF == ord('q'):
+            stop_event.set()
+            break
+
+    cv2.destroyAllWindows()
+    
         
 def main():
 
     # Create threads
     threads = [     
         threading.Thread(target=capture_thread, name="CaptureThread", daemon=True),
-        threading.Thread(target=distributor_thread, name="DistributorThread", daemon=True),
         threading.Thread(target=marker_detection_thread, name="MarkerDetectionThread", daemon=True),
         threading.Thread(target=color_detection_thread, name="ColorDetectionThread", daemon=True),
         threading.Thread(target=dispatcher_thread, name="DispatcherThread", daemon=True),
+        threading.Thread(target=display_thread, name="DisplayThread", daemon=True),
     ]
     
     # Start threads
@@ -415,6 +429,10 @@ def main():
     
     try:
         while not stop_event.is_set():
+            k = cv2.waitKey(1) & 0xFF
+            if k == ord('q'):
+                stop_event.set()
+                break
             sleep(0.05)
 
     except keyboardInterrupt: # Ctrl+C
